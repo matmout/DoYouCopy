@@ -5,7 +5,13 @@ Threading contract, the key point for an audit:
   worker handles them one at a time, in order: the GPU has a single user;
 - answers go back as signals, delivered on the GUI thread;
 - only cancel() and stop_live() touch the worker from outside, through
-  threading.Event flags; nothing else is shared between the threads.
+  threading.Event flags; nothing else is shared between the threads;
+- the model is also freed on this thread, by shutdown(): freeing a GPU model of
+  the ROCm build of CTranslate2 from another thread, once this one has ended,
+  kills the process (exit code 127, sometimes a native stack trace);
+- after a CPU model of that build, the thread can never end at all (see
+  FasterWhisperEngine.pins_its_thread): shutdown() then leaves it running, and
+  the app ends the process with os._exit (app.main).
 """
 
 from __future__ import annotations
@@ -15,7 +21,7 @@ import threading
 import time
 from collections.abc import Callable
 
-from PySide6.QtCore import QObject, QThread, Signal, Slot
+from PySide6.QtCore import QObject, Qt, QThread, Signal, Slot
 
 from mywhisper.core.engine import TranscriptionEngine
 from mywhisper.core.live import LiveTranscriber
@@ -51,6 +57,7 @@ class ModelWorker(QObject):
     request_dictate = Signal(object, object, int)  # audio, TranscribeOptions, job id
     request_reconfigure = Signal(object, str)  # engine.configure() kwargs, model key to reload
     request_retranscribe = Signal(object, float, float, object, str, int)  # path, start, end, options, key, job
+    request_unload = Signal()  # blocking: the caller waits until the model is freed
 
     model_loading = Signal(str)  # model label
     model_downloading = Signal(str, int, int)  # model name, done bytes, total bytes
@@ -94,7 +101,10 @@ class ModelWorker(QObject):
         self.request_dictate.connect(self._dictate)
         self.request_reconfigure.connect(self._reconfigure)
         self.request_retranscribe.connect(self._retranscribe)
+        self.request_unload.connect(self._unload, Qt.ConnectionType.BlockingQueuedConnection)
         self.live_config = None  # LiveConfig for the next live session (None: defaults)
+        self.ended = False  # the thread has stopped (set by shutdown)
+        self._shut_down = False
         self._thread.start()
 
     def transcribe(self, audio, options: TranscribeOptions) -> None:
@@ -125,11 +135,33 @@ class ModelWorker(QObject):
         """Thread-safe: stops the running transcription after the current segment."""
         self._cancel.set()
 
-    def shutdown(self) -> None:
+    def shutdown(self) -> bool:
+        """Stops the running job, frees the model on this worker's thread, then ends
+        the thread. Blocks until done; safe to call more than once.
+
+        Returns self.ended. False when the engine pins its thread (CPU model of the
+        ROCm build): the thread is left running, idle, since waiting for its end would
+        hang forever; the caller must then end the process with os._exit."""
+        if self._shut_down:
+            return self.ended
+        self._shut_down = True
         self.cancel()
         self.stop_live()
+        self.request_unload.emit()  # runs after the job in progress, which now ends quickly
+        if getattr(self._engine, "pins_its_thread", False):
+            log.info("Model thread left running: its end would deadlock in CTranslate2")
+            return False
         self._thread.quit()
         self._thread.wait()
+        self.ended = True
+        return True
+
+    @Slot()
+    def _unload(self) -> None:
+        try:
+            self._engine.unload()
+        except Exception:
+            log.exception("Model unload failed")
 
     def _download_progress(self, spec, done: int, total: int) -> None:
         now = time.monotonic()

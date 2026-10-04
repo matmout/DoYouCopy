@@ -291,6 +291,7 @@ Principes :
 
 - **L'interface ne dépend que du Protocol `TranscriptionEngine`.** Un autre backend (whisper.cpp Vulkan, transformers…) s'ajoute dans `core/` sans toucher l'UI.
 - **Un seul thread (`ModelWorker`) possède le modèle.** Les demandes (chargement, transcription) passent par des signaux Qt en file d'attente : pas d'accès concurrent au GPU, et l'UI ne gèle jamais.
+- **Le modèle est aussi libéré sur ce thread, à la fermeture.** Avec la version ROCm de CTranslate2, libérer un modèle GPU depuis un autre thread tue le processus (code 127). Après un modèle processeur, ce thread ne peut même plus se terminer : il est laissé en vie et l'application se termine par `os._exit`, une fois l'historique et les réglages enregistrés.
 - **Les segments sont émis un par un** depuis le générateur de faster-whisper. C'est ce qui produit l'affichage progressif et permet d'annuler entre deux segments.
 - **Ajouter un modèle** revient à ajouter une entrée `ModelSpec` dans `core/models.py`. **Ajouter un format d'export** revient à créer une classe avec `suffix`, `label` et `render()`, puis à appeler `register()`.
 

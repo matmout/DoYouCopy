@@ -1,6 +1,7 @@
 """Speech-to-text engine: faster-whisper (CTranslate2) behind a small protocol.
 
-Not thread-safe: a single owner, the ModelWorker thread (ui/workers.py), calls it.
+Not thread-safe: a single owner, the ModelWorker thread (ui/workers.py), calls it,
+from load() to unload(). A GPU model must be freed on the thread that loaded it.
 Models are looked up locally first (works offline) and downloaded only when the
 settings allow it. A GPU load failure falls back to the CPU instead of failing.
 """
@@ -46,6 +47,8 @@ def _rocm_build() -> bool:
 # Destroying a multi-threaded CPU model of the ROCm build of CTranslate2 never returns
 # (its thread pool teardown deadlocks; the CPU/CUDA build from PyPI is fine). Such models
 # are kept alive for the life of the process and reused: key = (path, compute type, threads).
+# The same teardown also blocks the end of any thread that loaded one, and the process
+# exit after it: see FasterWhisperEngine.pins_its_thread.
 _kept_cpu_models: dict[tuple, object] = {}
 
 
@@ -91,6 +94,7 @@ class FasterWhisperEngine:
         self._model = None
         self._batched = None
         self._cpu_threads = 0  # 0 = automatic
+        self._pinned = False  # see pins_its_thread
         self._model_path = ""
         # (model spec, done bytes, total bytes) while a missing model downloads
         self.on_download_progress: Callable[[ModelSpec, int, int], None] | None = None
@@ -102,6 +106,14 @@ class FasterWhisperEngine:
     @property
     def model(self) -> ModelSpec | None:
         return self._spec
+
+    @property
+    def pins_its_thread(self) -> bool:
+        """True once a CPU model of the ROCm build has been loaded. The thread that
+        loaded it can then never end (its exit deadlocks inside CTranslate2, and so does
+        the process exit that follows), even after unload(). The owner must leave that
+        thread running and end the process with os._exit (see ModelWorker.shutdown)."""
+        return self._pinned
 
     def load(self, spec: ModelSpec) -> None:
         """Loads spec (no-op if already loaded), downloading it first if needed.
@@ -121,6 +133,7 @@ class FasterWhisperEngine:
             self._model = _kept_cpu_models[kept]
             self._spec = spec
             self._model_path = path
+            self._pinned = True
             return
         try:
             self._model = WhisperModel(
@@ -134,6 +147,8 @@ class FasterWhisperEngine:
             self._model = WhisperModel(path, device=CPU.device, compute_type=CPU.compute_type, **self._threads())
         self._spec = spec
         self._model_path = path
+        if not self._device.is_gpu and _rocm_build():
+            self._pinned = True
 
     def unload(self) -> None:
         """Frees the model, except a CPU model of the ROCm build (see _kept_cpu_models)."""

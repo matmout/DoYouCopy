@@ -130,3 +130,43 @@ def test_replacements_apply_to_segments(app, make):
     session.transcribe_file(Path("x.wav"))
     wait_until(app, lambda: results)
     assert [s.text for s in results[0].segments] == ["Premier passage.", "Second passage."]
+
+
+def test_shutdown_frees_the_model_on_the_worker_thread(app):
+    # Freeing a ROCm GPU model from another thread, once the worker has ended,
+    # kills the process (exit code 127).
+    import threading
+
+    class ThreadRecordingEngine(FakeEngine):
+        def load(self, spec):
+            self.load_thread = threading.get_ident()
+            super().load(spec)
+
+        def unload(self):
+            self.unload_thread = threading.get_ident()
+            super().unload()
+
+    engine = ThreadRecordingEngine()
+    worker = ModelWorker(engine)
+    worker.request_load.emit("turbo")
+    wait_until(app, lambda: engine.model is not None)
+    worker.shutdown()
+    assert engine.model is None
+    assert engine.unload_thread == engine.load_thread != threading.get_ident()
+    assert worker.ended and worker.shutdown()  # a second call returns at once
+
+
+def test_shutdown_leaves_a_pinned_thread_running(app):
+    # CPU model of the ROCm build: waiting for the thread's end would hang forever.
+    class PinningEngine(FakeEngine):
+        pins_its_thread = True
+
+    engine = PinningEngine()
+    worker = ModelWorker(engine)
+    worker.request_load.emit("turbo")
+    wait_until(app, lambda: engine.model is not None)
+    assert worker.shutdown() is False and not worker.ended
+    assert engine.model is None and worker._thread.isRunning()  # freed, thread still there
+    assert worker.shutdown() is False  # idempotent, returns at once
+    worker._thread.quit()  # the fake engine does not deadlock: clean up for the test run
+    worker._thread.wait()

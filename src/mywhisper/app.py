@@ -73,7 +73,14 @@ def main() -> int:
     if "--minimized" not in args or tray is None:
         window.show()
     code = app.exec()
-    engine.unload()  # frees the model, or keeps it alive where freeing would hang
+    # Normally already done by MainWindow.closeEvent; covers any other way out.
+    if not worker.shutdown():
+        # The model thread cannot end (CPU model of the ROCm build of CTranslate2), and
+        # a normal exit would wait for it forever. Everything is saved by now (history,
+        # settings): end the process without running the native destructors.
+        log.info("Exiting with os._exit (model thread pinned)")
+        logging.shutdown()
+        os._exit(code)
     return code
 
 
