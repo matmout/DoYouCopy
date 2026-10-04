@@ -1,3 +1,13 @@
+"""The model thread: every use of the engine (load, transcribe, live, dictation).
+
+Threading contract, the key point for an audit:
+- requests come from the GUI thread through queued signals (request_*), so the
+  worker handles them one at a time, in order: the GPU has a single user;
+- answers go back as signals, delivered on the GUI thread;
+- only cancel() and stop_live() touch the worker from outside, through
+  threading.Event flags; nothing else is shared between the threads.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -144,6 +154,7 @@ class ModelWorker(QObject):
 
     @Slot(str)
     def _load(self, key: str) -> None:
+        """Loads the window's model and reports it (model_loading, model_loaded or error)."""
         spec = get_model(key)
         if self._engine.model == spec:
             return
@@ -201,12 +212,15 @@ class ModelWorker(QObject):
 
     @Slot(object, float, float, object, str, int)
     def _retranscribe(self, path, start: float, end: float, options: TranscribeOptions, key: str, job: int) -> None:
+        # The passage model is a temporary guest: it is loaded silently (no model_loading /
+        # model_loaded / error), so the window neither shows it as its model nor reports a
+        # failure twice. Only the reload of the window's own model is announced.
         previous = self._engine.model
         try:
             clip = self._clip_loader(str(path), start, end)
-            self._load(key)
-            if self._engine.model != get_model(key):
-                raise RuntimeError(f"modèle {get_model(key).model_name} indisponible")
+            spec = get_model(key)
+            if self._engine.model != spec:
+                self._engine.load(spec)
             _, segments = self._engine.transcribe(clip, options)
             result = [shift_segment(s, start) for s in segments]
         except Exception as exc:

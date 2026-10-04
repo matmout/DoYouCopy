@@ -1,3 +1,14 @@
+"""Main window: capture controls, transcript, player, history panel, settings.
+
+The window only displays and routes. Its collaborators hold the logic:
+- SessionController (session.py): capture, transcription and current result;
+- ModelWorker (ui/workers.py): the engine, on its own thread;
+- HistoryStore (storage/history.py): saving, autosave of long sessions, reopening;
+- Settings (config.py): every change is applied, then saved at once.
+The universal dictation (dictation/controller.py) is attached by app.py when a
+system tray exists; the window then only records its texts in the history.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -307,6 +318,7 @@ class MainWindow(QMainWindow):
         if self.history is not None:
             panel = HistoryPanel(self.history, t)
             panel.opened.connect(self._open_history_entry)
+            panel.deleting.connect(self._release_history_audio)
             panel.deleted.connect(self._history_entry_deleted)
             panel.renamed.connect(self._history_entry_renamed)
             panel.setVisible(self.settings.history_visible)
@@ -853,6 +865,11 @@ class MainWindow(QMainWindow):
         if self.history_panel is not None:
             self.history_panel.refresh()
 
+    def _release_history_audio(self, entry_id: int) -> None:
+        """The player keeps its file open, and Windows cannot delete an open file."""
+        if entry_id == self.history_id:
+            self.player.load(None)
+
     def _history_entry_deleted(self, entry_id: int) -> None:
         if entry_id == self.history_id:
             self.history_id = None
@@ -873,6 +890,7 @@ class MainWindow(QMainWindow):
     def clear_history(self) -> None:
         if self.history is None:
             return
+        self.player.load(None)  # releases the audio file, so that it can be deleted
         self.history.clear()
         self.history_id = None
         self.history_panel.refresh()

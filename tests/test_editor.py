@@ -163,7 +163,7 @@ def test_retranscribe_passage_with_precise_model_then_back(app):
     wait_until(app, lambda: not session.retranscribing)
     assert clips == [("a.flac", 1.3, 3.2)]
     assert engine.options.language == "fr"
-    assert loads == ["precise", "turbo"] and engine.model.key == "turbo"
+    assert loads == ["turbo"] and engine.model.key == "turbo"  # the passage model is not announced
     assert session.segments[0] is TIMED[0]
     new = session.segments[1]
     assert new.text == "Texte précis." and new.start == pytest.approx(1.5) and new.words[0].start == pytest.approx(1.5)
@@ -182,6 +182,32 @@ def test_retranscribe_failure_reports_and_restores(app):
     session.retranscribe(Path("a.flac"), 0, 0)
     wait_until(app, lambda: not session.retranscribing)
     assert "fichier absent" in errors[0] and session.segments == TIMED and engine.model.key == "turbo"
+    worker.shutdown()
+
+
+class NoPreciseEngine(PassageEngine):
+    """The passage model cannot be loaded (e.g. missing, offline)."""
+
+    def load(self, spec):
+        if spec.key == "precise":
+            self.model = None
+            raise RuntimeError("modèle absent")
+        super().load(spec)
+
+
+def test_retranscribe_model_failure_reported_once(app):
+    engine = NoPreciseEngine()
+    worker = ModelWorker(engine, clip_loader=lambda *a: np.zeros(16000))
+    session = SessionController(Settings(), worker)
+    errors = []
+    session.error.connect(lambda message, retry: errors.append((message, retry)))
+    session.load_model("turbo")
+    wait_until(app, lambda: session.model_ready)
+    session.open(list(TIMED), "x")
+    session.retranscribe(Path("a.flac"), 0, 0, "precise")
+    wait_until(app, lambda: not session.retranscribing and session.model_ready)
+    assert len(errors) == 1 and "modèle absent" in errors[0][0] and errors[0][1] is False
+    assert engine.model.key == "turbo" and session.segments == TIMED
     worker.shutdown()
 
 
@@ -234,3 +260,17 @@ def test_new_capture_hides_the_player_and_file_is_playable(app, window, tmp_path
     assert w.player.path == audio
     w._clear()
     assert w.player.path is None and not w.player.isVisibleTo(w)
+
+
+def test_deleting_the_open_entry_releases_and_deletes_its_audio(app, window):
+    # Windows cannot delete a file the media player still holds open.
+    w, store = window
+    entry_id = store.save(kind="record", title="Enregistrement", segments=list(TIMED), language="fr")
+    store.attach_audio(entry_id, np.zeros(3 * SAMPLE_RATE, dtype=np.float32), wait=True)
+    audio = store.get(entry_id).audio
+    w._open_history_entry(entry_id)
+    w.player.toggle()
+    app.processEvents()
+    w.history_panel.delete(entry_id, confirm=False)
+    assert w.player.path is None and w.history_id is None
+    assert not audio.exists()

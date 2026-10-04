@@ -1,3 +1,16 @@
+"""Entry point: startup sequence, then the Qt application.
+
+Order matters and is the main thing to check when auditing startup:
+1. logging (a packaged app has no console: everything goes to a log file);
+2. runtime.startup.prepare(): puts the right CTranslate2 build on sys.path;
+3. detect_device(): first import of ctranslate2, before PySide6 loads its DLLs;
+4. Qt: QApplication, main window, tray icon and the global dictation hotkey.
+
+Command-line switches: --minimized (start in the tray, used by "start with
+Windows"), --setup-runtime (end of the installer: GPU runtime download) and
+--probe <file> (child process that reports whether the GPU is usable).
+"""
+
 from __future__ import annotations
 
 import logging
@@ -102,7 +115,7 @@ def setup_logging() -> None:
     if frozen:
         for name in ("stdout", "stderr"):
             if getattr(sys, name) is None:
-                setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))
+                setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))  # noqa: SIM115 (open for the life of the process)
     path = diagnostics.setup_logging(console=not frozen)
     log.info("MyWhisper %s started, log in %s", __version__, path)
 

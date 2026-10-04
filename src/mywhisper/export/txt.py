@@ -1,3 +1,5 @@
+"""Plain text export: one line per segment, no times."""
+
 from __future__ import annotations
 
 from collections.abc import Sequence

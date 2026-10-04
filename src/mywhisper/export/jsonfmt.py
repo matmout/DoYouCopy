@@ -1,3 +1,5 @@
+"""JSON export: segments with their words, times and confidence, for other tools."""
+
 from __future__ import annotations
 
 import json

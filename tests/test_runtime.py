@@ -140,6 +140,35 @@ def test_download_resumes_after_a_cut(tmp_path):
     assert opener.calls[-1][1] > 0  # the second request used a Range
 
 
+def test_download_restarts_when_the_part_is_already_whole(tmp_path):
+    # Crash between the last byte and the rename: the server answers the Range with 416.
+    import urllib.error
+
+    data = b"x" * 1000
+    (tmp_path / "f.bin.part").write_bytes(data)
+    calls = []
+
+    def opener(url, offset=0):
+        calls.append(offset)
+        if offset:
+            raise urllib.error.HTTPError(url, 416, "Range Not Satisfiable", {}, None)
+        return FakeResponse(data)
+
+    download_file("https://h/f.bin", tmp_path / "f.bin", sha(data), opener=opener)
+    assert (tmp_path / "f.bin").read_bytes() == data and calls == [1000, 0]
+
+
+def test_download_reports_a_truncated_response(tmp_path):
+    import http.client
+
+    class Truncated(FakeResponse):
+        def read(self, size=-1):
+            raise http.client.IncompleteRead(b"", 10)
+
+    with pytest.raises(DownloadError, match="interrompu"):
+        download_file("https://h/f", tmp_path / "f", None, opener=lambda url, offset=0: Truncated(b""))
+
+
 def test_download_can_be_cancelled(tmp_path):
     cancel = threading.Event()
     cancel.set()

@@ -231,6 +231,9 @@ class HistoryStore:
         self.db.commit()
 
     def delete(self, entry_id: int) -> None:
+        """Removes the entry and its audio. The audio must not be open elsewhere (player):
+        Windows refuses to delete an open file, which would then stay on disk."""
+        self.wait_for_audio()  # an encoding in progress would recreate the file afterwards
         row = self.db.execute("SELECT audio_path FROM sessions WHERE id=?", (entry_id,)).fetchone()
         self.db.execute("DELETE FROM sessions WHERE id=?", (entry_id,))
         self.db.commit()
@@ -251,6 +254,7 @@ class HistoryStore:
         """Retention: removes the audio of sessions older than N days, keeps their text."""
         if older_than_days <= 0:
             return 0
+        self.wait_for_audio()
         limit = (now or time.time()) - older_than_days * 86400
         rows = self.db.execute(
             "SELECT id, audio_path FROM sessions WHERE audio_path IS NOT NULL AND created < ?", (limit,)

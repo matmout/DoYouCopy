@@ -29,6 +29,7 @@ PANEL_WIDTH = 270
 
 class HistoryPanel(QFrame):
     opened = Signal(int)  # entry id
+    deleting = Signal(int)  # entry id, about to be deleted: release its audio file now
     deleted = Signal(int)  # entry id
     renamed = Signal(int, str)  # entry id, new title
 
@@ -190,6 +191,7 @@ class HistoryPanel(QFrame):
             )
             if answer != QMessageBox.StandardButton.Yes:
                 return
+        self.deleting.emit(entry_id)
         self.store.delete(entry_id)
         if entry_id == self.current_id:
             self.current_id = None

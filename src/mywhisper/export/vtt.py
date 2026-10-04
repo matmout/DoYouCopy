@@ -1,3 +1,5 @@
+"""WebVTT (.vtt) subtitles, same cues as SRT with a dot before the milliseconds."""
+
 from __future__ import annotations
 
 from collections.abc import Sequence

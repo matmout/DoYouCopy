@@ -25,7 +25,7 @@ CLOSE = "close"  # closing quote / parenthesis: no space before
 _APOS = "['’]"
 VOICE_COMMANDS: dict[str, list[tuple[str, str, str]]] = {
     "fr": [
-        (rf"points? de suspension", PUNCT, "…"),
+        (r"points? de suspension", PUNCT, "…"),
         (rf"point{_APOS}?\s?d{_APOS}\s?interrogation", PUNCT, "?"),
         (rf"point{_APOS}?\s?d{_APOS}\s?exclamation", PUNCT, "!"),
         (r"point[- ]virgule", PUNCT, ";"),

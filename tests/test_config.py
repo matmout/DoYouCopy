@@ -46,3 +46,31 @@ def test_vocabulary_and_dictation_roundtrip(tmp_path: Path):
     assert (loaded.dictation_hotkey, loaded.dictation_mode) == ("Ctrl+Alt+D", "toggle")
     assert loaded.hotwords_prompt() == "ROCm, Mme Dupuis"
     assert Settings().hotwords_prompt() is None
+
+
+def test_invalid_values_fall_back_one_by_one(tmp_path: Path):
+    path = tmp_path / "settings.json"
+    path.write_text(
+        '{"model_key": "precise", "beam_size": "5", "hotwords": null, "cpu_threads": true,'
+        ' "vad_threshold": 1, "language": null, "input_device": 3}',
+        encoding="utf-8",
+    )
+    loaded = Settings.load(path)
+    assert loaded.model_key == "precise"
+    assert (loaded.beam_size, loaded.hotwords, loaded.cpu_threads) == (0, [], 0)
+    assert loaded.vad_threshold == 1.0 and isinstance(loaded.vad_threshold, float)
+    assert (loaded.language, loaded.input_device) == (None, None)
+
+
+def test_non_object_file_gives_defaults(tmp_path: Path):
+    path = tmp_path / "settings.json"
+    path.write_text("[1, 2]", encoding="utf-8")
+    assert Settings.load(path) == Settings()
+
+
+def test_save_leaves_no_temporary_file(tmp_path: Path):
+    path = tmp_path / "settings.json"
+    Settings().save(path)
+    Settings(model_key="light").save(path)
+    assert Settings.load(path).model_key == "light"
+    assert [p.name for p in tmp_path.iterdir()] == ["settings.json"]

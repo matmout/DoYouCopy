@@ -1,3 +1,9 @@
+"""The three Whisper models offered in the window, keyed by a stable id.
+
+The key ("light", "turbo", "precise") is what the settings and the history store;
+the faster-whisper model name may change without breaking existing files.
+"""
+
 from __future__ import annotations
 
 from mywhisper.core.types import ModelSpec

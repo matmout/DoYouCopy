@@ -1,3 +1,5 @@
+"""Markdown export: one paragraph per segment, prefixed by its time code."""
+
 from __future__ import annotations
 
 from collections.abc import Sequence

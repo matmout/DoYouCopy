@@ -1,3 +1,10 @@
+"""Speech-to-text engine: faster-whisper (CTranslate2) behind a small protocol.
+
+Not thread-safe: a single owner, the ModelWorker thread (ui/workers.py), calls it.
+Models are looked up locally first (works offline) and downloaded only when the
+settings allow it. A GPU load failure falls back to the CPU instead of failing.
+"""
+
 from __future__ import annotations
 
 import gc
@@ -67,6 +74,8 @@ class TranscriptionEngine(Protocol):
 
 
 class FasterWhisperEngine:
+    """TranscriptionEngine on faster-whisper. One model loaded at a time."""
+
     def __init__(
         self,
         device: DeviceConfig,
@@ -95,6 +104,11 @@ class FasterWhisperEngine:
         return self._spec
 
     def load(self, spec: ModelSpec) -> None:
+        """Loads spec (no-op if already loaded), downloading it first if needed.
+
+        Raises ModelNotAvailableError, DownloadError or the CTranslate2 error. On a GPU
+        failure the engine switches to the CPU for good (self.device changes): the
+        caller reads device.description afterwards to tell the user."""
         if self._spec == spec and self._model is not None:
             return
         self.unload()
@@ -122,6 +136,7 @@ class FasterWhisperEngine:
         self._model_path = path
 
     def unload(self) -> None:
+        """Frees the model, except a CPU model of the ROCm build (see _kept_cpu_models)."""
         if self._model is not None and not self._device.is_gpu and _rocm_build():
             key = self._kept_key(self._model_path)
             if key not in _kept_cpu_models:
@@ -136,6 +151,8 @@ class FasterWhisperEngine:
     def transcribe(
         self, audio: AudioSource, options: TranscribeOptions
     ) -> tuple[TranscriptionInfo, Iterator[Segment]]:
+        """audio: a file path or 16 kHz mono samples. The language is detected before
+        returning; the segments are decoded lazily, as the iterator is consumed."""
         if self._model is None or self._spec is None:
             raise RuntimeError("Aucun modèle chargé")
         if isinstance(audio, Path):
@@ -162,6 +179,7 @@ class FasterWhisperEngine:
         )
 
     def transcribe_kwargs(self, options: TranscribeOptions) -> dict:
+        """TranscribeOptions -> faster-whisper arguments; 0 / None mean the model's default."""
         spec = self._spec
         condition = options.condition_on_previous_text
         kwargs = dict(

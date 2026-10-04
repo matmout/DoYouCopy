@@ -1,3 +1,10 @@
+"""Microphone capture with PortAudio (sounddevice), delivered as 16 kHz mono float32.
+
+The PortAudio callback runs on an audio thread: it only appends to a list under a
+lock. Consumers either take everything at stop() (recording, dictation) or drain() as
+they go (live mode); level feeds the meters.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -61,17 +68,27 @@ class MicRecorder:
         return self._level
 
     def start(self) -> None:
+        """Opens the input stream; raises (PortAudioError…) if the device cannot be used.
+
+        On failure the recorder stays stopped: is_recording must never report a stream
+        that does not run, or the window would wait forever for its end.
+        """
         if self._stream is not None:
             return
         self._chunks = []
         device = _device_index(self.device_name)
         try:
-            self._stream = self._open(device, SAMPLE_RATE)
+            stream = self._open(device, SAMPLE_RATE)
         except sd.PortAudioError:
             # Some drivers refuse 16 kHz: record at the native rate and resample on stop.
             native = int(sd.query_devices(device, "input")["default_samplerate"])
-            self._stream = self._open(device, native)
-        self._stream.start()
+            stream = self._open(device, native)
+        try:
+            stream.start()
+        except Exception:
+            stream.close()
+            raise
+        self._stream = stream
 
     def stop(self) -> np.ndarray:
         if self._stream is None:

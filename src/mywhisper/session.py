@@ -265,7 +265,10 @@ class SessionController(QObject):
         self.worker.cancel()
 
     def open(self, segments: list[Segment], name: str, language: str | None = None) -> bool:
-        """Shows a past transcription (history) as the current result."""
+        """Shows a past transcription (history) as the current result.
+
+        Only segments, name and language are replaced: result() is meant for a capture
+        or file just transcribed, an opened entry is saved back through its history id."""
         if not self.available:
             return False
         self.segments = list(segments)

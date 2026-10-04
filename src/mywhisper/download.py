@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
 import threading
+import urllib.error
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
@@ -52,6 +54,9 @@ def download_file(
 
     progress also receives the bytes already present when resuming, so a caller can
     add everything up against the expected total.
+
+    Raises DownloadError (message for the user) or DownloadCancelled. dest only ever
+    appears complete: the data goes to dest.part, renamed once the SHA-256 matches.
     """
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists() and (sha256 is None or file_sha256(dest) == sha256):
@@ -63,6 +68,13 @@ def download_file(
     digest = hashlib.sha256()
     try:
         response = opener(url, offset)
+    except urllib.error.HTTPError as exc:
+        if exc.code != 416 or not offset:
+            raise DownloadError(f"Téléchargement impossible ({_host(url)}) : {exc}") from exc
+        # 416 Range Not Satisfiable: the .part is already whole (or longer than the file,
+        # if it changed on the server). Without starting over, every retry would fail.
+        part.unlink(missing_ok=True)
+        return download_file(url, dest, sha256, progress, cancel, opener)
     except OSError as exc:
         raise DownloadError(f"Téléchargement impossible ({_host(url)}) : {exc}") from exc
     with response:
@@ -86,7 +98,7 @@ def download_file(
                     digest.update(block)
                     if progress:
                         progress(len(block))
-        except OSError as exc:
+        except (OSError, http.client.HTTPException) as exc:  # IncompleteRead is not an OSError
             raise DownloadError(f"Téléchargement interrompu ({_host(url)}) : {exc}") from exc
     if sha256 is not None and digest.hexdigest() != sha256:
         part.unlink(missing_ok=True)

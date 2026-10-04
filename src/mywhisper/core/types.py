@@ -1,3 +1,9 @@
+"""Plain data shared by every layer: audio, segments, words, options, device.
+
+All frozen dataclasses: a Segment handed to the UI, the history or an exporter
+can never be modified behind their back; edits create new instances.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

@@ -1,3 +1,11 @@
+"""User settings: one JSON file in %APPDATA%/MyWhisper, and the app's data folders.
+
+Settings is the single source of truth while the app runs: the window, the
+dictation and the engine all read it. The file is only a snapshot of it, written
+after every change; a missing, damaged or partly invalid file never prevents the
+app from starting (the affected values fall back to their defaults).
+"""
+
 from __future__ import annotations
 
 import json
@@ -9,6 +17,9 @@ from pathlib import Path
 from mywhisper.core.models import DEFAULT_MODEL_KEY
 
 log = logging.getLogger(__name__)
+
+# Settings whose default is None but which hold a string once chosen.
+_OPTIONAL_STR = {"language", "input_device"}
 
 
 def _app_dir(env_var: str, fallback: str) -> Path:
@@ -32,6 +43,9 @@ def default_models_dir() -> Path:
 
 @dataclass
 class Settings:
+    """Every user choice, with its default. Adding a field is enough to persist it:
+    older files simply lack it (default used), unknown keys are ignored."""
+
     model_key: str = DEFAULT_MODEL_KEY
     language: str | None = None
     vad_filter: bool = True
@@ -90,6 +104,7 @@ class Settings:
 
     @classmethod
     def load(cls, path: Path | None = None) -> Settings:
+        """Reads the file; never raises. Values of the wrong type are dropped one by one."""
         path = path or default_settings_path()
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
@@ -98,10 +113,46 @@ class Settings:
         except (OSError, ValueError):
             log.warning("Unreadable settings file %s, using defaults", path)
             return cls()
-        known = {f.name for f in fields(cls)}
-        return cls(**{k: v for k, v in data.items() if k in known})
+        if not isinstance(data, dict):
+            log.warning("Settings file %s holds no object, using defaults", path)
+            return cls()
+        defaults = cls()
+        values = {}
+        for f in fields(cls):
+            if f.name in data:
+                value = _checked(f.name, data[f.name], getattr(defaults, f.name))
+                if value is not _INVALID:
+                    values[f.name] = value
+        return cls(**values)
 
     def save(self, path: Path | None = None) -> None:
+        """Atomic: written to a temporary file, then renamed over the old one, so a crash
+        or a full disk mid-write cannot leave a truncated file (and reset every setting)."""
         path = path or default_settings_path()
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(asdict(self), indent=2, ensure_ascii=False), encoding="utf-8")
+        temporary = path.with_name(path.name + ".tmp")
+        temporary.write_text(json.dumps(asdict(self), indent=2, ensure_ascii=False), encoding="utf-8")
+        os.replace(temporary, path)
+
+
+_INVALID = object()
+
+
+def _checked(name: str, value, default):
+    """value if it has the type of the default (int accepted for a float), else _INVALID.
+
+    Guards against hand-edited or damaged files: a "beam_size": "5" would otherwise
+    reach CTranslate2, a "hotwords": null would crash the first transcription."""
+    if value is None and (default is None or name in _OPTIONAL_STR):
+        return None
+    expected = str if default is None else type(default)
+    if expected is float and isinstance(value, int) and not isinstance(value, bool):
+        return float(value)
+    if expected is int and isinstance(value, bool):
+        valid = False  # bool is a subclass of int, but True is no thread count
+    else:
+        valid = isinstance(value, expected)
+    if not valid:
+        log.warning("Setting %s: invalid value %r ignored, default kept", name, value)
+        return _INVALID
+    return value
