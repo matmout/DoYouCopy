@@ -69,7 +69,10 @@ if ($Sign) {
 }
 
 Write-Host "==> [1/5] PyInstaller" -ForegroundColor Cyan
-Invoke-Checked $Py @("-m", "pip", "install", "--quiet", "pyinstaller>=6.10")
+& $Py -c "import importlib.util, sys; sys.exit(importlib.util.find_spec('PyInstaller') is None)"
+if ($LASTEXITCODE -ne 0) {  # CI installs it from requirements\build.txt (locked)
+    Invoke-Checked $Py @("-m", "pip", "install", "--quiet", "pyinstaller>=6.10")
+}
 
 Write-Host "==> [2/5] Moteur CTranslate2 embarqué (CPU + CUDA)" -ForegroundColor Cyan
 New-Item -ItemType Directory -Force -Path $Cache | Out-Null
