@@ -279,7 +279,7 @@ class HistoryStore:
         try:
             return [self._entry(row) for row in self.db.execute(sql, (match, limit))]
         except sqlite3.OperationalError:
-            log.warning("Invalid search %r", query)
+            log.warning("Invalid search query")  # its words stay private
             return []
 
     def get(self, entry_id: int) -> Entry | None:

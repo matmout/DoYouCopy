@@ -9,8 +9,9 @@ from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QKeySequence
+from PySide6.QtGui import QDesktopServices, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -96,11 +97,15 @@ class SettingsDialog(QDialog):
         hardware_status: Callable[[], tuple[str, bool]] | None = None,
         hook=None,
         history_dir: Path | None = None,
+        diagnostics: Callable[[], str] | None = None,
+        logs_dir: Path | None = None,
     ) -> None:
         super().__init__(parent)
         self.settings = settings
         self.hook = hook
         self._history_dir = history_dir
+        self._diagnostics = diagnostics
+        self._logs_dir = logs_dir
         self._microphones = microphones or []
         self._device_description = device_description
         self._hardware_status = hardware_status or (lambda: ("", False))
@@ -575,6 +580,25 @@ class SettingsDialog(QDialog):
         self.install_button.setVisible(can_install)
         form.addRow("", self.install_button)
 
+        form = self._section(layout, "Diagnostic")
+        copy = QPushButton("Copier les informations de diagnostic")
+        copy.clicked.connect(self._copy_diagnostics)
+        copy.setEnabled(self._diagnostics is not None)
+        self.diagnostics_button = copy
+        logs = QPushButton("Ouvrir le dossier des journaux")
+        logs.clicked.connect(self._open_logs)
+        logs.setEnabled(self._logs_dir is not None)
+        row = QHBoxLayout()
+        row.addWidget(copy)
+        row.addWidget(logs)
+        row.addStretch()
+        form.addRow(row)
+        self.diagnostics_status = self._hint(
+            "Machine, carte graphique, versions, réglages et dernières erreurs, à joindre à un signalement. "
+            "Aucune transcription ni aucun mot du vocabulaire n'y figure : relisez-le avant de l'envoyer."
+        )
+        form.addRow(self.diagnostics_status)
+
     def _device_changed(self, value: str) -> None:
         self._set("device", value)
         self._fill_compute_types()
@@ -599,6 +623,19 @@ class SettingsDialog(QDialog):
 
     def set_device_description_from_load(self, _key: str, description: str) -> None:
         self.set_device_description(description)
+
+    def _copy_diagnostics(self) -> None:
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            text = self._diagnostics()
+        finally:
+            QApplication.restoreOverrideCursor()
+        QGuiApplication.clipboard().setText(text)
+        self.diagnostics_button.setText("Copié dans le presse-papiers ✓")
+
+    def _open_logs(self) -> None:
+        self._logs_dir.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._logs_dir)))
 
     # ---- general actions -------------------------------------------------
 

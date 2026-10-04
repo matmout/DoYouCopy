@@ -5,6 +5,7 @@ import os
 import sys
 from pathlib import Path
 
+from mywhisper import __version__
 from mywhisper.config import Settings
 from mywhisper.core.engine import FasterWhisperEngine
 
@@ -79,21 +80,16 @@ def open_history(settings: Settings):
 def setup_logging() -> None:
     """A packaged (windowed) app has no console: log to a file, and give the libraries
     that print progress somewhere harmless to write."""
+    from mywhisper import diagnostics
     from mywhisper.runtime import store
 
-    fmt = "%(asctime)s %(levelname)s %(name)s: %(message)s"
-    if not store.is_frozen():
-        logging.basicConfig(level=logging.INFO, format=fmt)
-        return
-    for name in ("stdout", "stderr"):
-        if getattr(sys, name) is None:
-            setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))
-    log_dir = store.runtime_root().parent / "logs"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    from logging.handlers import RotatingFileHandler
-
-    handler = RotatingFileHandler(log_dir / "mywhisper.log", maxBytes=2_000_000, backupCount=2, encoding="utf-8")
-    logging.basicConfig(level=logging.INFO, format=fmt, handlers=[handler])
+    frozen = store.is_frozen()
+    if frozen:
+        for name in ("stdout", "stderr"):
+            if getattr(sys, name) is None:
+                setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))
+    path = diagnostics.setup_logging(console=not frozen)
+    log.info("MyWhisper %s started, log in %s", __version__, path)
 
 
 def run_runtime_setup(settings: Settings) -> int:

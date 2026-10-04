@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from mywhisper import export
+from mywhisper import diagnostics, export
 from mywhisper.audio.recorder import list_input_devices
 from mywhisper.config import Settings
 from mywhisper.core.models import MODELS
@@ -97,6 +97,7 @@ class MainWindow(QMainWindow):
         self.session = SessionController(settings, worker)
         self.history = history
         self.history_id: int | None = None  # history entry of the current result
+        self.loaded_model: str | None = None
         self._autosaved_count = 0
         self.tokens = theme.resolve(settings.theme)
         self.record_seconds = 0.0
@@ -399,6 +400,8 @@ class MainWindow(QMainWindow):
             hardware_status=self._hardware_status,
             hook=self.hook,
             history_dir=self.history.folder if self.history is not None else None,
+            diagnostics=self.diagnostic_report,
+            logs_dir=diagnostics.default_logs_dir(),
         )
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         dialog.changed.connect(self._on_setting_changed)
@@ -674,6 +677,7 @@ class MainWindow(QMainWindow):
         self._status(f"Téléchargement du modèle · {done * 100 // max(total, 1)} %")
 
     def _on_model_loaded(self, key: str, device_description: str) -> None:
+        self.loaded_model = MODELS[key].model_name
         if not self.session.busy:
             self.transcript.set_progress(None)
         self.device_chip.setText(device_description)
@@ -806,6 +810,25 @@ class MainWindow(QMainWindow):
         self.history_id = None
         self.history_panel.refresh()
         self.toast.show_message("Historique effacé")
+
+    # ---- diagnostic ------------------------------------------------------
+
+    def diagnostic_report(self) -> str:
+        from mywhisper.runtime import gpu_detect
+
+        log_file = diagnostics.default_logs_dir() / diagnostics.LOG_NAME
+        context = diagnostics.Context(
+            settings=self.settings,
+            device_description=self.device_chip.text(),
+            runtime_variant=self.runtime_variant,
+            cpu_notice=self.cpu_notice.detail if self.cpu_notice is not None else None,
+            model_loaded=self.loaded_model,
+            microphones=self._microphones,
+            history_count=self.history.count() if self.history is not None else None,
+            log_file=log_file if log_file.is_file() else None,
+            adapters=gpu_detect.list_adapters,
+        )
+        return diagnostics.report(context)
 
     # ---- CPU fallback ----------------------------------------------------
 
