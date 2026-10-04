@@ -265,3 +265,27 @@ def test_vocabulary_dialog_writes_settings(app):
     assert settings.hotwords == ["ROCm", "Radeon"]
     assert settings.replacements == [["a", "b"], ["rock m", "ROCm"]]
     assert settings.voice_commands is False
+
+
+def test_close_hides_to_tray_until_quit(app, make_window, monkeypatch):
+    from PySide6.QtWidgets import QApplication as QApp
+
+    quits = []
+    monkeypatch.setattr(QApp, "quit", lambda: quits.append(True))
+    window = make_window(FakeEngine())
+    window.close_to_tray_available = True
+    hidden = []
+    window.hidden_to_tray.connect(lambda: hidden.append(True))
+    window.show()
+    window.close()
+    assert hidden and not window.isVisible() and not quits
+    window.quit_app()
+    assert quits
+
+
+def test_invalid_hotkey_is_reverted(app, make_window):
+    window = make_window(FakeEngine())
+    window._hotkey_edited("Space")
+    assert window.settings.dictation_hotkey == "Ctrl+Shift+Space"
+    window._hotkey_edited("Ctrl+Alt+D")
+    assert window.settings.dictation_hotkey == "Ctrl+Alt+D"

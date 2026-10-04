@@ -4,7 +4,7 @@ import logging
 from dataclasses import replace
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QDragEnterEvent, QDropEvent, QGuiApplication, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
@@ -28,6 +28,8 @@ from mywhisper.core.live import LiveUpdate, merge_sentences
 from mywhisper.core.models import MODELS
 from mywhisper.core.textproc import apply_replacements
 from mywhisper.core.types import SAMPLE_RATE, AudioSource, Segment, TranscribeOptions
+from mywhisper.dictation import autostart
+from mywhisper.dictation.hotkey import parse_hotkey
 from mywhisper.export.markdown import MarkdownExporter, timecode
 from mywhisper.ui import theme
 from mywhisper.ui.vocabulary_dialog import VocabularyDialog
@@ -71,6 +73,10 @@ LEVEL_INTERVAL_MS = 33
 
 
 class MainWindow(QMainWindow):
+    hidden_to_tray = Signal()
+    hotkey_changed = Signal(str)
+    theme_tokens_changed = Signal(object)  # theme.Tokens
+
     def __init__(self, settings: Settings, worker: ModelWorker, device_description: str) -> None:
         super().__init__()
         self.settings = settings
@@ -86,6 +92,11 @@ class MainWindow(QMainWindow):
         self.model_loading = False
         self.record_seconds = 0.0
         self._duration = 0.0
+        # set by app.py when the tray icon and the universal dictation are available
+        self.dictation = None
+        self.hook = None
+        self.close_to_tray_available = False
+        self._quitting = False
 
         self.setWindowTitle("MyWhisper")
         self.resize(900, 760)
@@ -252,6 +263,21 @@ class MainWindow(QMainWindow):
         pop.theme_changed.connect(self._theme_setting_changed)
         pop.timestamps_changed.connect(lambda _: self._rerender())
         pop.vocabulary_requested.connect(self._open_vocabulary)
+        pop.hotkey_edit.setKeySequence(QKeySequence.fromString(self.settings.dictation_hotkey))
+        pop.dictation_mode_control.set_value(self.settings.dictation_mode)
+        pop.output_combo.setCurrentIndex(max(0, pop.output_combo.findData(self.settings.dictation_output)))
+        pop.sounds_check.setChecked(self.settings.dictation_sounds)
+        pop.tray_check.setChecked(self.settings.close_to_tray)
+        pop.autostart_check.setChecked(autostart.is_enabled())
+        pop.hotkey_edited.connect(self._hotkey_edited)
+        pop.dictation_mode_control.changed.connect(lambda v: self._set_setting("dictation_mode", v))
+        pop.output_combo.currentIndexChanged.connect(
+            lambda _: self._set_setting("dictation_output", pop.output_combo.currentData())
+        )
+        pop.sounds_check.toggled.connect(lambda v: self._set_setting("dictation_sounds", v))
+        pop.tray_check.toggled.connect(lambda v: self._set_setting("close_to_tray", v))
+        pop.autostart_check.toggled.connect(self._autostart_toggled)
+        pop.visibility_changed.connect(self._settings_visibility_changed)
         # Settings are the single source of truth, kept current for the universal dictation.
         self.mode_control.changed.connect(lambda v: self._set_setting("mode", v))
         self.language_combo.currentIndexChanged.connect(
@@ -301,6 +327,35 @@ class MainWindow(QMainWindow):
         except OSError:
             log.exception("Could not save settings")
 
+    # ---- universal dictation --------------------------------------------
+
+    def attach_dictation(self, controller, hook) -> None:
+        self.dictation = controller
+        self.hook = hook
+
+    def _hotkey_edited(self, text: str) -> None:
+        if not text:
+            return
+        try:
+            hotkey = parse_hotkey(text)
+        except ValueError as exc:
+            self.settings_popover.hotkey_edit.setKeySequence(QKeySequence.fromString(self.settings.dictation_hotkey))
+            self.toast.show_message(str(exc))
+            return
+        self._set_setting("dictation_hotkey", hotkey.text)
+        if self.hook is not None:
+            self.hook.set_hotkey(hotkey)
+        self.hotkey_changed.emit(hotkey.text)
+
+    def _settings_visibility_changed(self, visible: bool) -> None:
+        # Typing a new shortcut must not trigger the current one.
+        if self.hook is not None:
+            self.hook.suspend() if visible else self.hook.resume()
+
+    def _autostart_toggled(self, enabled: bool) -> None:
+        if not autostart.set_enabled(enabled):
+            self.toast.show_message("Impossible de modifier le démarrage automatique")
+
     def _open_vocabulary(self) -> None:
         dialog = VocabularyDialog(self.settings, self)
         if dialog.exec():
@@ -320,6 +375,7 @@ class MainWindow(QMainWindow):
             widget.set_tokens(self.tokens)
         self._apply_icons()
         self._rerender()
+        self.theme_tokens_changed.emit(self.tokens)
 
     def _apply_icons(self) -> None:
         t = self.tokens
@@ -346,6 +402,10 @@ class MainWindow(QMainWindow):
         self._toggle_capture()
 
     def _toggle_capture(self) -> None:
+        dictating = self.dictation is not None and self.dictation.state != "idle"
+        if dictating and self.idle and not self.recorder.is_recording:
+            self._status("Dictée en cours…", 3000)
+            return
         if self.live:
             self._toggle_live()
         elif self.recorder.is_recording:
@@ -640,10 +700,22 @@ class MainWindow(QMainWindow):
     def _open_settings(self) -> None:
         self.settings_popover.popup_below(self.settings_button)
 
+    def quit_app(self) -> None:
+        self._quitting = True
+        self.close()
+
     def closeEvent(self, event) -> None:
+        if self.close_to_tray_available and self.settings.close_to_tray and not self._quitting:
+            event.ignore()
+            self.hide()
+            self.save_settings()
+            self.hidden_to_tray.emit()
+            return
         self.worker.stop_live()
         if self.recorder.is_recording:
             self.recorder.stop()
         self.save_settings()
         self.worker.shutdown()
         super().closeEvent(event)
+        if self.close_to_tray_available:  # the tray keeps the app alive otherwise
+            QApplication.quit()

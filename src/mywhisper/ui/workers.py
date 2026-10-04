@@ -25,6 +25,7 @@ class ModelWorker(QObject):
     request_load = Signal(str)
     request_transcribe = Signal(object, object)  # AudioSource, TranscribeOptions
     request_live = Signal(object, object)  # source with drain(), TranscribeOptions
+    request_dictate = Signal(object, object, int)  # audio, TranscribeOptions, job id
 
     model_loading = Signal(str)  # model label
     model_loaded = Signal(str, str)  # model key, device description
@@ -34,6 +35,9 @@ class ModelWorker(QObject):
     live_update = Signal(object, float)  # LiveUpdate, pass duration in s
     live_finished = Signal()
     error = Signal(str)
+    # universal dictation: the whole text at once, kept away from the main window
+    dictation_finished = Signal(int, str, str)  # job id, text, language
+    dictation_failed = Signal(int, str)  # job id, message
 
     LIVE_POLL_S = 0.05
 
@@ -53,6 +57,7 @@ class ModelWorker(QObject):
         self.request_load.connect(self._load)
         self.request_transcribe.connect(self._transcribe)
         self.request_live.connect(self._live)
+        self.request_dictate.connect(self._dictate)
         self._thread.start()
 
     def transcribe(self, audio, options: TranscribeOptions) -> None:
@@ -65,6 +70,10 @@ class ModelWorker(QObject):
         """Queues a live session that reads source.drain() until stop_live()."""
         self._live_stop.clear()
         self.request_live.emit(source, options)
+
+    def dictate(self, audio, options: TranscribeOptions, job: int) -> None:
+        """Queues a dictation; the answer is dictation_finished / dictation_failed."""
+        self.request_dictate.emit(audio, options, job)
 
     def stop_live(self) -> None:
         """Thread-safe: ends the live session after a final pass."""
@@ -135,3 +144,14 @@ class ModelWorker(QObject):
             log.exception("Live transcription failed")
             self.error.emit(f"Échec de la transcription en direct : {exc}")
         self.live_finished.emit()
+
+    @Slot(object, object, int)
+    def _dictate(self, audio, options: TranscribeOptions, job: int) -> None:
+        try:
+            info, segments = self._engine.transcribe(audio, options)
+            text = " ".join(s.text for s in segments if s.text)
+        except Exception as exc:
+            log.exception("Dictation failed")
+            self.dictation_failed.emit(job, f"Échec de la dictée : {exc}")
+            return
+        self.dictation_finished.emit(job, text.strip(), info.language)
