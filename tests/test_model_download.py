@@ -61,6 +61,16 @@ def test_download_fetches_only_needed_files_with_progress(tmp_path):
     assert any(REPO in url for url in opener.requested)
 
 
+def test_listing_ignores_paths_leaving_the_model_folder():
+    entries = [
+        {"type": "file", "path": "model.bin", "size": 1},
+        {"type": "file", "path": "vocabulary.x/../../../evil.dll", "size": 1},
+        {"type": "file", "path": "vocabulary.x\\..\\..\\evil.dll", "size": 1},
+    ]
+    files = model_download.list_files(REPO, opener=lambda url, offset=0: io.BytesIO(json.dumps(entries).encode()))
+    assert [f.path for f in files] == ["model.bin"]
+
+
 def test_download_rejects_a_corrupted_model(tmp_path):
     with pytest.raises(DownloadError, match="SHA-256"):
         model_download.download("large-v3-turbo", tmp_path, opener=hub(model_sha="0" * 64))

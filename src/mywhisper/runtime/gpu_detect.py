@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import subprocess
 import sys
@@ -71,12 +72,18 @@ def parse_adapters(raw: str) -> list[Adapter]:
     return adapters
 
 
+def _powershell() -> str:
+    """Full path: a bare name is looked up in the current folder before System32."""
+    system_root = os.environ.get("SYSTEMROOT") or r"C:\Windows"
+    return os.path.join(system_root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+
+
 def list_adapters() -> list[Adapter]:
     if sys.platform != "win32":
         return []
     try:
         result = subprocess.run(
-            ["powershell", "-NoProfile", "-NonInteractive", "-Command", _POWERSHELL],
+            [_powershell(), "-NoProfile", "-NonInteractive", "-Command", _POWERSHELL],
             capture_output=True,
             text=True,
             timeout=20,

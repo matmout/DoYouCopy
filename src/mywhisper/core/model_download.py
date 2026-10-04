@@ -56,7 +56,9 @@ def list_files(repo: str, opener: Callable = open_url) -> list[RemoteFile]:
     files = []
     for entry in entries:
         path = entry.get("path", "")
-        if entry.get("type") == "file" and any(fnmatch.fnmatch(path, p) for p in PATTERNS):
+        # top-level files only: a path from the network must not leave the model folder
+        top_level = "/" not in path and "\\" not in path and path not in ("", ".", "..")
+        if entry.get("type") == "file" and top_level and any(fnmatch.fnmatch(path, p) for p in PATTERNS):
             lfs = entry.get("lfs") or {}
             files.append(RemoteFile(path, int(lfs.get("size") or entry.get("size") or 0), lfs.get("oid")))
     if not any(f.path == "model.bin" for f in files):
