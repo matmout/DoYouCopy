@@ -12,15 +12,15 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtWidgets import QApplication
 
-from mywhisper.app import setup_style  # noqa: E402
-from mywhisper.config import Settings  # noqa: E402
-from mywhisper.core.types import Segment, TranscriptionInfo, Word  # noqa: E402
-from mywhisper.gpu.rocm_env import DeviceConfig  # noqa: E402
-from mywhisper.ui.main_window import MainWindow  # noqa: E402
-from mywhisper.ui.widgets.transcript_view import LISTENING_RECORD  # noqa: E402
-from mywhisper.ui.workers import ModelWorker  # noqa: E402
+from mywhisper.app import setup_style
+from mywhisper.config import Settings
+from mywhisper.core.types import Segment, TranscriptionInfo, Word
+from mywhisper.gpu.rocm_env import DeviceConfig
+from mywhisper.ui.main_window import MainWindow
+from mywhisper.ui.widgets.transcript_view import LISTENING_RECORD
+from mywhisper.ui.workers import ModelWorker
 
 GPU = DeviceConfig("cuda", "float16", "GPU · float16")
 

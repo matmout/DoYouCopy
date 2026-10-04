@@ -8,14 +8,14 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtWidgets import QApplication
 
-from mywhisper.config import Settings  # noqa: E402
-from mywhisper.core.live import LiveUpdate  # noqa: E402
-from mywhisper.core.types import Segment, TranscriptionInfo, Word  # noqa: E402
-from mywhisper.gpu.rocm_env import CPU  # noqa: E402
-from mywhisper.ui.main_window import MainWindow  # noqa: E402
-from mywhisper.ui.workers import ModelWorker  # noqa: E402
+from mywhisper.config import Settings
+from mywhisper.core.live import LiveUpdate
+from mywhisper.core.types import Segment, TranscriptionInfo, Word
+from mywhisper.gpu.rocm_env import CPU
+from mywhisper.ui.main_window import MainWindow
+from mywhisper.ui.workers import ModelWorker
 
 SEGMENTS = [Segment(0, 1.5, "Premier segment."), Segment(1.5, 3, "Second segment.")]
 
@@ -90,7 +90,7 @@ def words_segment(*words: tuple[float, str]) -> Segment:
 class FakeLive:
     """Plays scripted updates, one per step, then flushes the last one."""
 
-    UPDATES = [
+    UPDATES = [  # noqa: RUF012 (read-only script)
         LiveUpdate([], "Bonjour tout"),
         LiveUpdate([words_segment((0.0, " Bonjour"), (0.4, " tout"))], "le monde"),
         LiveUpdate([words_segment((0.8, " le"), (1.0, " monde."))], "Ceci est"),

@@ -7,14 +7,14 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QObject, Signal  # noqa: E402
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtCore import QObject, Signal
+from PySide6.QtWidgets import QApplication
 
-from mywhisper.config import Settings  # noqa: E402
-from mywhisper.core.types import SAMPLE_RATE, Segment, TranscriptionInfo  # noqa: E402
-from mywhisper.dictation.controller import IDLE, RECORDING, TRANSCRIBING, DictationController  # noqa: E402
-from mywhisper.gpu.rocm_env import CPU  # noqa: E402
-from mywhisper.ui.workers import ModelWorker  # noqa: E402
+from mywhisper.config import Settings
+from mywhisper.core.types import SAMPLE_RATE, Segment, TranscriptionInfo
+from mywhisper.dictation.controller import IDLE, RECORDING, TRANSCRIBING, DictationController
+from mywhisper.gpu.rocm_env import CPU
+from mywhisper.ui.workers import ModelWorker
 
 
 class FakeEngine:

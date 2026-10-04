@@ -3,6 +3,11 @@
 RegisterHotKey would be simpler, but it only reports key presses: push-to-talk
 needs the release too. The hook is installed from the Qt main thread, whose event
 loop pumps the Win32 messages the hook relies on.
+
+Windows silently removes a low-level hook whose callback once took too long
+(LowLevelHooksTimeout, e.g. while the main thread was busy). Nothing reports it:
+the hotkey would just stop working until a restart. The hook is therefore
+reinstalled periodically, which costs two system calls.
 """
 
 from __future__ import annotations
@@ -23,6 +28,7 @@ log = logging.getLogger(__name__)
 
 MOD_CTRL, MOD_SHIFT, MOD_ALT, MOD_WIN = 1, 2, 4, 8
 VK_ESCAPE = 0x1B
+REINSTALL_MS = 15_000  # longest time the hotkey may stay dead after Windows dropped the hook
 
 _QT_MODIFIERS = (
     (Qt.KeyboardModifier.ControlModifier, MOD_CTRL),
@@ -97,6 +103,11 @@ class HotkeyMatcher:
         self.escape_armed = False  # Esc cancels, only while a dictation is running
         self._down = False
 
+    @property
+    def held(self) -> bool:
+        """The hotkey is pressed: its release has not been seen yet."""
+        return self._down
+
     def feed(self, vk: int, is_down: bool, mods: int) -> tuple[str | None, bool]:
         """Returns (event, swallow); event is "press", "release", "escape" or None."""
         if vk == self.hotkey.vk:
@@ -169,14 +180,16 @@ class KeyboardHook(QObject):
     released = Signal()
     escape = Signal()
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(self, parent: QObject | None = None, user32=None) -> None:
         super().__init__(parent)
         self._matcher: HotkeyMatcher | None = None
         self._handle = None
         self._proc = None  # keeps the ctypes callback alive
         self._suspended = False
-        self._user32 = _user32() if sys.platform == "win32" else None
+        self._user32 = user32 or (_user32() if sys.platform == "win32" else None)
         self._signals = {"press": self.pressed, "release": self.released, "escape": self.escape}
+        self._watchdog = QTimer(self, interval=REINSTALL_MS)
+        self._watchdog.timeout.connect(self.reinstall)
 
     @property
     def hotkey(self) -> Hotkey | None:
@@ -207,9 +220,26 @@ class KeyboardHook(QObject):
             log.error("SetWindowsHookExW failed: %s", ctypes.get_last_error())
             self._proc = None
             return False
+        self._watchdog.start()
         return True
 
+    def reinstall(self) -> None:
+        """Puts a fresh hook in place of the current one (see the module docstring).
+
+        The new hook is set before the old one is removed, so no key is missed; both
+        calls run on this thread, which cannot run a hook callback in between. Skipped
+        while the hotkey is held, so that its release reaches the same matcher state."""
+        if not self._handle or self._user32 is None or (self._matcher and self._matcher.held):
+            return
+        handle = self._user32.SetWindowsHookExW(WH_KEYBOARD_LL, self._proc, None, 0)
+        if not handle:
+            log.warning("Keyboard hook reinstall failed: %s", ctypes.get_last_error())
+            return  # the current one may still be alive: keep it
+        self._user32.UnhookWindowsHookEx(self._handle)  # fails harmlessly if Windows dropped it
+        self._handle = handle
+
     def uninstall(self) -> None:
+        self._watchdog.stop()
         if self._handle and self._user32:
             self._user32.UnhookWindowsHookEx(self._handle)
         self._handle = None

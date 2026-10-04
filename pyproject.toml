@@ -23,7 +23,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "ruff>=0.6"]
 build = ["pyinstaller>=6.10"]
 
 [project.scripts]
@@ -37,6 +37,28 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "mywhisper.ui" = ["resources/fonts/*.ttf", "resources/fonts/OFL.txt"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# Errors, likely bugs and modern syntax; no pure style rules (the code has its own style).
+select = ["E", "F", "W", "B", "UP", "SIM", "RUF", "PLE", "PLW"]
+ignore = [
+    "E501",    # long lines: some French messages read better unbroken
+    "RUF001",  # ambiguous unicode: « », ’ and … are intended in French texts
+    "RUF002",
+    "RUF003",
+    "SIM105",  # try / except / pass reads as plainly as contextlib.suppress
+    "SIM108",  # ternaries are not always clearer
+    "PLW0108", # Qt slots: a lambda drops the signal's arguments on purpose
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]  # QT_QPA_PLATFORM must be set before importing PySide6
+"scripts/snapshot_ui.py" = ["B023"]  # shot() is called inside its own loop iteration
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

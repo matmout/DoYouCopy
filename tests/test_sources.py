@@ -10,16 +10,16 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtWidgets import QApplication
 
-from mywhisper.audio import loopback  # noqa: E402
-from mywhisper.audio.sources import BOTH, MIC, SYSTEM, MixedRecorder, make_recorder, mix  # noqa: E402
-from mywhisper.config import Settings  # noqa: E402
-from mywhisper.core.types import SAMPLE_RATE  # noqa: E402
-from mywhisper.session import SessionController  # noqa: E402
-from mywhisper.ui.workers import ModelWorker  # noqa: E402
+from mywhisper.audio import loopback
+from mywhisper.audio.sources import BOTH, MIC, SYSTEM, MixedRecorder, make_recorder, mix
+from mywhisper.config import Settings
+from mywhisper.core.types import SAMPLE_RATE
+from mywhisper.session import SessionController
+from mywhisper.ui.workers import ModelWorker
 
-from test_ui import FakeEngine  # noqa: E402
+from test_ui import FakeEngine
 
 
 class Source:

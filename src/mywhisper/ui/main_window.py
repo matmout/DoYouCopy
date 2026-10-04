@@ -41,6 +41,7 @@ from mywhisper.core.types import Segment
 from mywhisper.dictation.hotkey import parse_hotkey
 from mywhisper.export.markdown import MarkdownExporter, timecode
 from mywhisper.gpu import rocm_env
+from mywhisper.history_controller import HistoryController
 from mywhisper.runtime import startup
 from mywhisper.session import LIVE_KIND, RECORD, SessionController, SessionResult, clock
 from mywhisper.storage.history import HistoryStore
@@ -88,7 +89,6 @@ AUDIO_SUFFIXES = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".aac", ".wm
 LEVEL_INTERVAL_MS = 33
 MIN_WIDTH = 720  # of the main column; the history panel adds its own width
 AUTOSAVE_MS = 30_000  # long sessions are saved as they go: a crash loses 30 s at most
-CAPTURE_TITLES = {"record": "Enregistrement", "live": "Direct"}
 
 
 class MainWindow(QMainWindow):
@@ -96,8 +96,6 @@ class MainWindow(QMainWindow):
     hotkey_changed = Signal(str)
     theme_tokens_changed = Signal(object)  # theme.Tokens
     install_runtime_requested = Signal()
-    session_finished = Signal(object)  # SessionResult, for the history
-    audio_kept = Signal(int, object)  # history id, Path: a capture's audio is on disk
 
     def __init__(
         self,
@@ -110,10 +108,9 @@ class MainWindow(QMainWindow):
         self.settings = settings
         self.worker = worker
         self.session = SessionController(settings, worker)
-        self.history = history
-        self.history_id: int | None = None  # history entry of the current result
+        self.history = history  # the store, for the panel; saving goes through history_ctl
+        self.history_ctl = HistoryController(history, settings)
         self.loaded_model: str | None = None
-        self._autosaved_count = 0
         self.tokens = theme.resolve(settings.theme)
         self.record_seconds = 0.0
         # set by app.py when the tray icon and the universal dictation are available
@@ -319,7 +316,7 @@ class MainWindow(QMainWindow):
             panel = HistoryPanel(self.history, t)
             panel.opened.connect(self._open_history_entry)
             panel.deleting.connect(self._release_history_audio)
-            panel.deleted.connect(self._history_entry_deleted)
+            panel.deleted.connect(self.history_ctl.forget)
             panel.renamed.connect(self._history_entry_renamed)
             panel.setVisible(self.settings.history_visible)
             self.setMinimumWidth(MIN_WIDTH + (PANEL_WIDTH if self.settings.history_visible else 0))
@@ -327,6 +324,8 @@ class MainWindow(QMainWindow):
             self.history_button.toggled.connect(self._toggle_history)
             body.addWidget(panel)
             self.history_panel = panel
+            self.history_ctl.current_changed.connect(panel.select)
+            self.history_ctl.changed.connect(panel.refresh)
         body.addLayout(main_column, 1)
         layout.addWidget(top)
         layout.addLayout(body, 1)
@@ -382,9 +381,9 @@ class MainWindow(QMainWindow):
         s.segment_added.connect(self._on_segment)
         s.live_updated.connect(self.transcript.live_update)
         s.finished.connect(self._on_finished)
-        s.finished.connect(self._record_history)
+        s.finished.connect(self.history_ctl.record)
         s.segments_edited.connect(self._on_segments_edited)
-        self.audio_kept.connect(self._on_audio_kept)
+        self.history_ctl.audio_kept.connect(self._on_audio_kept)
         s.model_loading.connect(self._on_model_loading)
         s.model_downloading.connect(self._on_model_downloading)
         s.model_loaded.connect(self._on_model_loaded)
@@ -444,7 +443,7 @@ class MainWindow(QMainWindow):
             device_description=self.device_chip.text(),
             hardware_status=self._hardware_status,
             hook=self.hook,
-            history_dir=self.history.folder if self.history is not None else None,
+            history_dir=self.history_ctl.folder,
             diagnostics=self.diagnostic_report,
             logs_dir=diagnostics.default_logs_dir(),
         )
@@ -491,9 +490,8 @@ class MainWindow(QMainWindow):
             self._apply_hotkey()
         elif name == "history_visible":
             self.history_button.setChecked(value)
-        elif name == "history_audio_days" and self.history is not None:
-            self.history.purge_audio(value)
-            self.history_panel.refresh()
+        elif name == "history_audio_days":
+            self.history_ctl.purge_audio(value)
         self._sync_popover()
 
     def _apply_engine_settings(self) -> None:
@@ -712,9 +710,7 @@ class MainWindow(QMainWindow):
     def _clear(self) -> None:
         self._finish_editing(apply=False)
         self.player.load(None)
-        self.history_id = None
-        if self.history_panel is not None:
-            self.history_panel.select(None)
+        self.history_ctl.set_current(None)
         self.session.clear()
         self.transcript.clear()
         self.transcript.show_empty()
@@ -766,87 +762,36 @@ class MainWindow(QMainWindow):
             self.transcript.render(self.segments, self._timestamps())
         elif not self.segments:
             self.transcript.show_empty()
-        if result is not None:
-            if result.source_path is not None and result.source_path.is_file():
-                self.player.load(result.source_path)
-            self.session_finished.emit(result)
+        if result is not None and result.source_path is not None and result.source_path.is_file():
+            self.player.load(result.source_path)
 
     # ---- history ---------------------------------------------------------
 
+    @property
+    def history_id(self) -> int | None:
+        """History entry of the current result (None: not saved yet, or no history)."""
+        return self.history_ctl.current_id
+
     def _new_history_entry(self) -> None:
-        self.history_id = None
-        self._autosaved_count = 0
-        if self.history_panel is not None:
-            self.history_panel.select(None)
-
-    def _history_on(self) -> bool:
-        return self.history is not None and self.settings.history_enabled
-
-    def _save_history(self, result: SessionResult) -> None:
-        title = result.name if result.kind == "file" else CAPTURE_TITLES.get(result.kind, result.name)
-        try:
-            self.history_id = self.history.save(
-                kind=result.kind,
-                title=title,
-                segments=result.segments,
-                entry_id=self.history_id,
-                source=str(result.source_path or ""),
-                model=result.model_key,
-                language=result.language,
-                duration=result.duration,
-            )
-        except Exception:
-            log.exception("Could not save the history")
-            return
-        self._autosaved_count = len(result.segments)
-        self.history_panel.current_id = self.history_id
-        self.history_panel.refresh()
+        self.history_ctl.new_entry()
 
     def _autosave(self) -> None:
-        session = self.session
-        if session.idle or not self._history_on() or len(session.segments) == self._autosaved_count:
-            return
-        self._save_history(session.result())
-
-    def _record_history(self, result: SessionResult | None) -> None:
-        if result is None or not self._history_on():
-            return
-        self._save_history(result)
-        if self.history_id is not None and result.audio is not None and self.settings.history_keep_audio:
-            try:
-                self.history.attach_audio(self.history_id, result.audio, on_written=self.audio_kept.emit)
-            except Exception:
-                log.exception("Could not keep the audio")
-            self.history_panel.refresh()
+        self.history_ctl.autosave(self.session)
 
     def record_dictation(self, text: str) -> None:
-        """Universal dictation: kept only if asked (text only, never the audio)."""
-        text = text.strip()
-        if not (self._history_on() and self.settings.history_dictation and text):
-            return
-        try:
-            self.history.save(
-                kind="dictation",
-                title=text.splitlines()[0][:60],
-                segments=[Segment(0.0, 0.0, text)],
-                model=self.settings.model_key,
-            )
-        except Exception:
-            log.exception("Could not save the dictation")
-            return
-        self.history_panel.refresh()
+        """Universal dictation: kept if the user asked (text only, never the audio)."""
+        self.history_ctl.record_dictation(text)
 
     def _open_history_entry(self, entry_id: int) -> None:
-        entry = self.history.get(entry_id)
+        entry = self.history_ctl.entry(entry_id)
         if entry is None:
             return
         self._finish_editing()
         if not self.session.open(entry.segments, entry.title, entry.language):
             self.toast.show_message("Terminez d'abord la transcription en cours")
-            self.history_panel.select(self.history_id)
+            self.history_ctl.set_current(self.history_id)
             return
-        self.history_id = entry_id
-        self.history_panel.select(entry_id)
+        self.history_ctl.set_current(entry_id)
         self.transcript.hide_error()
         if entry.segments:
             self.transcript.render(entry.segments, self._timestamps(), scroll=False)
@@ -863,16 +808,12 @@ class MainWindow(QMainWindow):
         if entry_id == self.history_id and self.player.path is None:
             self.player.load(path)
         if self.history_panel is not None:
-            self.history_panel.refresh()
+            self.history_panel.refresh()  # the entry now shows "audio"
 
     def _release_history_audio(self, entry_id: int) -> None:
         """The player keeps its file open, and Windows cannot delete an open file."""
         if entry_id == self.history_id:
             self.player.load(None)
-
-    def _history_entry_deleted(self, entry_id: int) -> None:
-        if entry_id == self.history_id:
-            self.history_id = None
 
     def _history_entry_renamed(self, entry_id: int, title: str) -> None:
         if entry_id == self.history_id:
@@ -888,12 +829,10 @@ class MainWindow(QMainWindow):
         self._set_setting("history_visible", visible)
 
     def clear_history(self) -> None:
-        if self.history is None:
+        if not self.history_ctl.available:
             return
         self.player.load(None)  # releases the audio file, so that it can be deleted
-        self.history.clear()
-        self.history_id = None
-        self.history_panel.refresh()
+        self.history_ctl.clear()
         self.toast.show_message("Historique effacé")
 
     # ---- correction ------------------------------------------------------
@@ -929,11 +868,7 @@ class MainWindow(QMainWindow):
         self.edit_button.blockSignals(False)
 
     def _on_segments_edited(self) -> None:
-        if self.history_id is not None and self.history is not None:
-            try:
-                self.history.update_segments(self.history_id, self.segments)
-            except Exception:
-                log.exception("Could not save the corrections")
+        self.history_ctl.save_corrections(self.segments)
         self._rerender()
 
     def _transcript_menu(self, position) -> None:
@@ -979,7 +914,7 @@ class MainWindow(QMainWindow):
             cpu_notice=self.cpu_notice.detail if self.cpu_notice is not None else None,
             model_loaded=self.loaded_model,
             microphones=self._microphones,
-            history_count=self.history.count() if self.history is not None else None,
+            history_count=self.history_ctl.count(),
             log_file=log_file if log_file.is_file() else None,
             adapters=gpu_detect.list_adapters,
         )
@@ -1081,8 +1016,7 @@ class MainWindow(QMainWindow):
         self.player.stop()
         self.session.shutdown()
         self._autosave()
-        if self.history is not None:
-            self.history.close()
+        self.history_ctl.close()
         self.save_settings()
         self.worker.shutdown()
         super().closeEvent(event)

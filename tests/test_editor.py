@@ -8,22 +8,22 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QEvent, Qt  # noqa: E402
-from PySide6.QtGui import QKeyEvent, QTextCharFormat  # noqa: E402
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtCore import QEvent, Qt
+from PySide6.QtGui import QKeyEvent, QTextCharFormat
+from PySide6.QtWidgets import QApplication
 
-from mywhisper.config import Settings  # noqa: E402
-from mywhisper.core.types import SAMPLE_RATE, Segment, TranscriptionInfo, Word  # noqa: E402
-from mywhisper.gpu.rocm_env import CPU  # noqa: E402
-from mywhisper.session import SessionController  # noqa: E402
-from mywhisper.storage.history import HistoryStore  # noqa: E402
-from mywhisper.storage.audio import write_audio  # noqa: E402
-from mywhisper.ui import theme  # noqa: E402
-from mywhisper.ui.main_window import MainWindow  # noqa: E402
-from mywhisper.ui.widgets.transcript_view import TranscriptView  # noqa: E402
-from mywhisper.ui.workers import ModelWorker  # noqa: E402
+from mywhisper.config import Settings
+from mywhisper.core.types import SAMPLE_RATE, Segment, TranscriptionInfo, Word
+from mywhisper.gpu.rocm_env import CPU
+from mywhisper.session import SessionController
+from mywhisper.storage.history import HistoryStore
+from mywhisper.storage.audio import write_audio
+from mywhisper.ui import theme
+from mywhisper.ui.main_window import MainWindow
+from mywhisper.ui.widgets.transcript_view import TranscriptView
+from mywhisper.ui.workers import ModelWorker
 
-from test_ui import FakeEngine, wait_until  # noqa: E402
+from test_ui import FakeEngine, wait_until
 
 TIMED = [
     Segment(0.0, 1.0, "Bonjour tout le monde.", (
@@ -252,7 +252,7 @@ def test_history_entry_with_audio_plays_and_edits_are_saved(app, window, tmp_pat
 
 
 def test_new_capture_hides_the_player_and_file_is_playable(app, window, tmp_path):
-    w, store = window
+    w, _store = window
     audio = tmp_path / "entretien.flac"
     write_audio(audio, np.zeros(SAMPLE_RATE, dtype=np.float32))
     w.session.transcribe_file(audio)

@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 # (stage, done, total): stage is "download" or "extract", done/total in bytes
 InstallProgress = Callable[[str, int, int], None]
 
-__all__ = ["DownloadCancelled", "DownloadError", "install", "free_space_ok"]
+__all__ = ["DownloadCancelled", "DownloadError", "free_space_ok", "install"]
 
 
 def free_space_ok(package: RuntimePackage, root: Path | None = None) -> bool:
@@ -61,7 +61,7 @@ def install(
     shutil.rmtree(staging, ignore_errors=True)
     staging.mkdir(parents=True)
     try:
-        wheels = [_wheel(path, d.member, staging) for path, d in zip(files, package.downloads)]
+        wheels = [_wheel(path, d.member, staging) for path, d in zip(files, package.downloads, strict=True)]
         total = sum(_uncompressed(w) for w in wheels)
         done = 0
         for wheel in wheels:

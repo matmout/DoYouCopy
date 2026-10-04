@@ -7,14 +7,14 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from mywhisper.config import Settings  # noqa: E402
-from mywhisper.core import model_download  # noqa: E402
-from mywhisper.core.engine import FasterWhisperEngine  # noqa: E402
-from mywhisper.core.models import MODELS  # noqa: E402
-from mywhisper.core.types import Segment, TranscribeOptions  # noqa: E402
-from mywhisper.export.srt import SrtExporter  # noqa: E402
-from mywhisper.gpu import rocm_env  # noqa: E402
-from mywhisper.options import DICTATION, FILE, LIVE, live_config, transcribe_options  # noqa: E402
+from mywhisper.config import Settings
+from mywhisper.core import model_download
+from mywhisper.core.engine import FasterWhisperEngine
+from mywhisper.core.models import MODELS
+from mywhisper.core.types import Segment, TranscribeOptions
+from mywhisper.export.srt import SrtExporter
+from mywhisper.gpu import rocm_env
+from mywhisper.options import DICTATION, FILE, LIVE, live_config, transcribe_options
 
 # ---- options ------------------------------------------------------------------
 
@@ -184,7 +184,7 @@ def test_dialog_switches_to_cpu_and_reloads(window):
     configured = window.worker._engine.configured
     assert configured["device"].device == "cpu" and configured["models_dir"] == Path(window.settings.models_dir)
     assert window.settings.device == "cpu"
-    assert [dialog.compute_combo.itemData(i) for i in range(dialog.compute_combo.count())][0] == "auto"
+    assert dialog.compute_combo.itemData(0) == "auto"
     dialog.close()
 
 

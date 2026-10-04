@@ -74,3 +74,31 @@ def test_save_leaves_no_temporary_file(tmp_path: Path):
     Settings(model_key="light").save(path)
     assert Settings.load(path).model_key == "light"
     assert [p.name for p in tmp_path.iterdir()] == ["settings.json"]
+
+
+def test_out_of_range_choices_fall_back(tmp_path: Path):
+    path = tmp_path / "settings.json"
+    path.write_text(
+        '{"dictation_mode": "always", "theme": "light", "model_key": "huge", "cpu_threads": -2,'
+        ' "replacements": [["ok", "OK"], ["seul"]], "hotwords": ["ROCm", 3]}',
+        encoding="utf-8",
+    )
+    loaded = Settings.load(path)
+    assert loaded.theme == "light"
+    assert (loaded.dictation_mode, loaded.model_key, loaded.cpu_threads) == ("hold", "turbo", 0)
+    assert (loaded.replacements, loaded.hotwords) == ([], [])
+
+
+def test_defaults_are_valid_choices():
+    from mywhisper.config import CHOICES
+
+    defaults = Settings()
+    for name, allowed in CHOICES.items():
+        assert getattr(defaults, name) in allowed, name
+
+
+def test_export_choices_match_the_exporters():
+    from mywhisper import export
+    from mywhisper.config import CHOICES
+
+    assert {e.suffix for e in export.exporters()} == CHOICES["default_export"]

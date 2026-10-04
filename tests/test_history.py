@@ -82,6 +82,33 @@ def test_audio_kept_purged_and_deleted(store):
     assert store.get(recent) is None and not recent_audio.exists()
 
 
+def test_locked_audio_is_retried_then_orphans_swept(store, monkeypatch):
+    samples = np.zeros(SAMPLE_RATE, dtype=np.float32)
+    old = store.save(kind="record", title="vieux", segments=SEGMENTS, created=time.time() - 40 * 86400)
+    kept = store.save(kind="record", title="gardé", segments=SEGMENTS)
+    store.attach_audio(old, samples, wait=True)
+    store.attach_audio(kept, samples, wait=True)
+    old_audio = store.get(old).audio
+
+    real_unlink = type(old_audio).unlink
+
+    def locked(self, missing_ok=False):  # what Windows does to a file open in a player
+        if self == old_audio:
+            raise PermissionError("in use")
+        real_unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(type(old_audio), "unlink", locked)
+    assert store.purge_audio(30) == 0 and store.get(old).audio == old_audio  # retried later
+    store.delete(old)  # the row goes, the locked file stays behind
+    monkeypatch.undo()
+    assert old_audio.exists()
+
+    (store.audio_dir / "99.flac.part").write_bytes(b"crash while encoding")
+    assert store.remove_orphan_audio() == 2
+    assert not old_audio.exists() and store.get(kept).audio.exists()
+    assert sorted(p.name for p in store.audio_dir.iterdir()) == [store.get(kept).audio.name]
+
+
 def test_clear_erases_everything(store):
     entry_id = store.save(kind="record", title="x", segments=SEGMENTS)
     store.attach_audio(entry_id, np.zeros(SAMPLE_RATE, dtype=np.float32), wait=True)

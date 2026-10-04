@@ -6,11 +6,11 @@ from mywhisper.core.types import SAMPLE_RATE, Segment, TranscribeOptions, Transc
 
 
 def speech(seconds: float) -> np.ndarray:
-    return np.full(int(round(seconds * SAMPLE_RATE)), 0.5, dtype=np.float32)
+    return np.full(round(seconds * SAMPLE_RATE), 0.5, dtype=np.float32)
 
 
 def silence(seconds: float) -> np.ndarray:
-    return np.zeros(int(round(seconds * SAMPLE_RATE)), dtype=np.float32)
+    return np.zeros(round(seconds * SAMPLE_RATE), dtype=np.float32)
 
 
 def energy_detector(audio: np.ndarray) -> list[tuple[float, float]]:

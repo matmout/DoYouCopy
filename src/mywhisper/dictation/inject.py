@@ -78,7 +78,7 @@ def _send_keys(*keys: tuple[int, bool]) -> bool:
     if sys.platform != "win32":
         return False
     inputs = (INPUT * len(keys))()
-    for item, (vk, down) in zip(inputs, keys):
+    for item, (vk, down) in zip(inputs, keys, strict=True):
         item.type = INPUT_KEYBOARD
         item.u.ki = KEYBDINPUT(vk, 0, 0 if down else KEYEVENTF_KEYUP, 0, 0)
     sent = _user32().SendInput(len(keys), inputs, ctypes.sizeof(INPUT))

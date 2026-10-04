@@ -80,6 +80,7 @@ def list_adapters() -> list[Adapter]:
             capture_output=True,
             text=True,
             timeout=20,
+            check=False,  # the output is parsed whatever the exit code
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         return parse_adapters(result.stdout)

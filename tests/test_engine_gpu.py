@@ -2,6 +2,7 @@
 
 import subprocess
 import sys
+from itertools import pairwise
 from pathlib import Path
 
 import numpy as np
@@ -77,7 +78,7 @@ def test_live_transcription_on_gpu(engine, speech_wav):
     print(f"\nlive: {len(passes)} passes, mean {sum(passes) / len(passes):.3f} s -> {text!r}")
     for word in ("quick", "brown", "fox", "lazy", "dog"):
         assert word in text
-    assert all(a.end <= b.start + 0.5 for a, b in zip(committed, committed[1:]))
+    assert all(a.end <= b.start + 0.5 for a, b in pairwise(committed))
 
 
 def test_batched_inference_and_advanced_options_on_gpu(engine, speech_wav):

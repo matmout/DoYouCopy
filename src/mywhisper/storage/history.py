@@ -251,7 +251,10 @@ class HistoryStore:
         self.db.execute("VACUUM")
 
     def purge_audio(self, older_than_days: int, now: float | None = None) -> int:
-        """Retention: removes the audio of sessions older than N days, keeps their text."""
+        """Retention: removes the audio of sessions older than N days, keeps their text.
+
+        An entry forgets its audio only once the file is really gone: a file that
+        Windows refuses to delete (open in a player) is retried at the next purge."""
         if older_than_days <= 0:
             return 0
         self.wait_for_audio()
@@ -259,21 +262,46 @@ class HistoryStore:
         rows = self.db.execute(
             "SELECT id, audio_path FROM sessions WHERE audio_path IS NOT NULL AND created < ?", (limit,)
         ).fetchall()
+        purged = 0
         for row in rows:
-            self._remove_audio(row["audio_path"])
-            self.db.execute("UPDATE sessions SET audio_path=NULL WHERE id=?", (row["id"],))
+            if self._remove_audio(row["audio_path"]):
+                self.db.execute("UPDATE sessions SET audio_path=NULL WHERE id=?", (row["id"],))
+                purged += 1
         self.db.commit()
-        return len(rows)
+        return purged
+
+    def remove_orphan_audio(self) -> int:
+        """Deletes audio files that no entry references any more: left behind by a
+        deletion Windows refused (file open elsewhere) or by a crash while encoding.
+        Run at startup, before any new capture can be encoding. Returns the count."""
+        if not self.audio_dir.is_dir():
+            return 0
+        self.wait_for_audio()
+        kept: set[Path] = set()
+        for row in self.db.execute("SELECT audio_path FROM sessions WHERE audio_path IS NOT NULL"):
+            path = Path(row["audio_path"])
+            kept |= {path, path.with_suffix(".wav")}
+        removed = 0
+        for candidate in self.audio_dir.iterdir():
+            if candidate.is_file() and candidate not in kept and self._remove_audio(str(candidate)):
+                removed += 1
+        if removed:
+            log.info("Removed %d orphan audio file(s)", removed)
+        return removed
 
     @staticmethod
-    def _remove_audio(path: str | None) -> None:
+    def _remove_audio(path: str | None) -> bool:
+        """Deletes the audio (FLAC, or its WAV fallback). True when no file is left."""
         if not path:
-            return
+            return True
+        gone = True
         for candidate in (Path(path), Path(path).with_suffix(".wav")):
             try:
                 candidate.unlink(missing_ok=True)
             except OSError:
                 log.warning("Could not delete %s", candidate)
+                gone = False
+        return gone
 
     # ---- reading ---------------------------------------------------------
 

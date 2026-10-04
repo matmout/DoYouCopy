@@ -4,13 +4,14 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from mywhisper.dictation.hotkey import (  # noqa: E402
+from mywhisper.dictation.hotkey import (
     MOD_ALT,
     MOD_CTRL,
     MOD_SHIFT,
     MOD_WIN,
     VK_ESCAPE,
     HotkeyMatcher,
+    KeyboardHook,
     parse_hotkey,
 )
 
@@ -63,3 +64,48 @@ def test_escape_only_while_armed():
     m.escape_armed = True
     assert m.feed(VK_ESCAPE, True, 0) == ("escape", True)
     assert m.feed(VK_ESCAPE, False, 0) == (None, False)
+
+
+@pytest.fixture(scope="module")
+def qapp():
+    from PySide6.QtWidgets import QApplication
+
+    return QApplication.instance() or QApplication([])
+
+
+class FakeUser32:
+    def __init__(self):
+        self.next_handle = 100
+        self.installed = []
+        self.fail = False
+
+    def SetWindowsHookExW(self, kind, proc, module, thread):
+        if self.fail:
+            return 0
+        self.next_handle += 1
+        self.installed.append(self.next_handle)
+        return self.next_handle
+
+    def UnhookWindowsHookEx(self, handle):
+        self.installed.remove(handle)
+        return True
+
+
+def test_hook_is_reinstalled_without_gap(qapp):
+    user32 = FakeUser32()
+    hook = KeyboardHook(user32=user32)
+    hook.set_hotkey(parse_hotkey("Ctrl+Shift+Space"))
+    assert hook.install() and user32.installed == [101]
+    hook.reinstall()
+    assert user32.installed == [102]  # the new one replaced the old one
+
+    hook._matcher.feed(0x20, True, MOD_CTRL | MOD_SHIFT)  # hotkey held: no swap now
+    hook.reinstall()
+    assert user32.installed == [102]
+    hook._matcher.feed(0x20, False, MOD_CTRL | MOD_SHIFT)
+
+    user32.fail = True
+    hook.reinstall()  # a failed attempt keeps the current hook
+    assert user32.installed == [102]
+    hook.uninstall()
+    assert user32.installed == [] and not hook._watchdog.isActive()

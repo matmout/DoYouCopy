@@ -14,12 +14,32 @@ import os
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
-from mywhisper.core.models import DEFAULT_MODEL_KEY
+from mywhisper.core.models import DEFAULT_MODEL_KEY, MODELS
 
 log = logging.getLogger(__name__)
 
 # Settings whose default is None but which hold a string once chosen.
 _OPTIONAL_STR = {"language", "input_device"}
+# Settings limited to a few values: anything else in the file falls back to the default.
+# Must stay in step with the choices offered by the windows (settings_dialog.py...).
+CHOICES: dict[str, frozenset[str]] = {
+    "model_key": frozenset(MODELS),
+    "mode": frozenset({"record", "live"}),
+    "theme": frozenset({"auto", "dark", "light"}),
+    "audio_source": frozenset({"mic", "system", "both"}),
+    "device": frozenset({"auto", "gpu", "cpu"}),
+    "task": frozenset({"transcribe", "translate"}),
+    "condition_previous": frozenset({"auto", "on", "off"}),
+    "default_export": frozenset({".txt", ".srt", ".vtt", ".md", ".docx", ".json"}),
+    "dictation_mode": frozenset({"hold", "toggle"}),
+    "dictation_output": frozenset({"paste", "clipboard"}),
+}
+# Counts and durations that cannot be negative.
+_NON_NEGATIVE = {
+    "cpu_threads", "beam_size", "vad_min_silence_ms", "batch_size", "history_audio_days",
+    "vad_threshold", "no_speech_threshold", "repetition_penalty", "live_step_s", "live_endpoint_s",
+    "transcript_font_size", "subtitle_max_chars", "subtitle_max_lines",
+}
 
 
 def _app_dir(env_var: str, fallback: str) -> Path:
@@ -139,7 +159,8 @@ _INVALID = object()
 
 
 def _checked(name: str, value, default):
-    """value if it has the type of the default (int accepted for a float), else _INVALID.
+    """value if it has the type of the default (int accepted for a float) and, for the
+    settings that have them, an allowed value or shape; else _INVALID.
 
     Guards against hand-edited or damaged files: a "beam_size": "5" would otherwise
     reach CTranslate2, a "hotwords": null would crash the first transcription."""
@@ -152,6 +173,17 @@ def _checked(name: str, value, default):
         valid = False  # bool is a subclass of int, but True is no thread count
     else:
         valid = isinstance(value, expected)
+    if valid and name in CHOICES:
+        valid = value in CHOICES[name]
+    elif valid and name in _NON_NEGATIVE:
+        valid = value >= 0
+    elif valid and name == "hotwords":
+        valid = all(isinstance(word, str) for word in value)
+    elif valid and name == "replacements":  # [heard, written] pairs of strings
+        valid = all(
+            isinstance(rule, list) and len(rule) == 2 and all(isinstance(part, str) for part in rule)
+            for rule in value
+        )
     if not valid:
         log.warning("Setting %s: invalid value %r ignored, default kept", name, value)
         return _INVALID

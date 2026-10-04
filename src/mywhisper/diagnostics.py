@@ -81,8 +81,8 @@ def recent_issues(log_file: Path, limit: int = RECENT_ISSUES) -> list[str]:
     keep = False
     try:
         with open(log_file, encoding="utf-8", errors="replace") as handle:
-            for line in handle:
-                line = line.rstrip("\n")
+            for raw in handle:
+                line = raw.rstrip("\n")
                 if line[:4].isdigit():  # a new record: "2026-10-04 12:00:00,123 LEVEL name: …"
                     parts = line.split(" ", 3)
                     keep = len(parts) > 2 and parts[2] in ("WARNING", "ERROR", "CRITICAL")

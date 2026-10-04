@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import re
+from itertools import pairwise
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 
@@ -125,7 +126,7 @@ class LiveTranscriber:
 
         edge = self._buffer_end - self._config.commit_margin_s
         agreed = 0
-        for before, now in zip(self._previous, words):
+        for before, now in zip(self._previous, words, strict=False):  # the passes differ in length
             if _norm(before.text) != _norm(now.text) or now.end > edge:
                 break
             agreed += 1
@@ -188,7 +189,7 @@ class LiveTranscriber:
     def _cut_at_pause(self, speech: list[tuple[float, float]]) -> None:
         """Cuts in the middle of the latest pause whose preceding speech is all committed."""
         pending_start = self._previous[0].start if self._previous else float("inf")
-        for (_, gap_start), (gap_end, _) in reversed(list(zip(speech, speech[1:]))):
+        for (_, gap_start), (gap_end, _) in reversed(list(pairwise(speech))):
             if self._committed_end >= gap_start - 0.2 and pending_start >= gap_start - 0.1:
                 self._cut_to((gap_start + gap_end) / 2)
                 return

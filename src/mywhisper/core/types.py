@@ -8,12 +8,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Union
-
 import numpy as np
 
 # A file path (decoded by PyAV inside faster-whisper) or 16 kHz mono float32 samples.
-AudioSource = Union[str, Path, np.ndarray]
+AudioSource = str | Path | np.ndarray
 
 SAMPLE_RATE = 16000
 

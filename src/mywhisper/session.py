@@ -291,8 +291,8 @@ class SessionController(QObject):
         if len(texts) != len(self.segments):
             raise ValueError("one text per segment")
         changed = False
-        for i, (segment, text) in enumerate(zip(self.segments, texts)):
-            text = text.strip()
+        for i, (segment, typed) in enumerate(zip(self.segments, texts, strict=True)):
+            text = typed.strip()
             if text != segment.text:
                 self.segments[i] = replace(segment, text=text, words=())
                 changed = True
