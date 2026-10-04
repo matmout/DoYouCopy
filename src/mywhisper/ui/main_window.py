@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import fields, replace
+from dataclasses import fields
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
@@ -22,17 +22,15 @@ from PySide6.QtWidgets import (
 )
 
 from mywhisper import export
-from mywhisper.audio.recorder import MicRecorder, list_input_devices
+from mywhisper.audio.recorder import list_input_devices
 from mywhisper.config import Settings
-from mywhisper.core.live import LiveUpdate, merge_sentences
 from mywhisper.core.models import MODELS
-from mywhisper.core.textproc import apply_replacements
-from mywhisper.core.types import SAMPLE_RATE, AudioSource, Segment
+from mywhisper.core.types import Segment
 from mywhisper.dictation.hotkey import parse_hotkey
 from mywhisper.export.markdown import MarkdownExporter, timecode
 from mywhisper.gpu import rocm_env
-from mywhisper.options import FILE, LIVE, live_config, transcribe_options
 from mywhisper.runtime import startup
+from mywhisper.session import LIVE_KIND, RECORD, SessionController, SessionResult, clock
 from mywhisper.ui import theme
 from mywhisper.ui.settings_dialog import SettingsDialog
 from mywhisper.ui.vocabulary_dialog import VocabularyDialog
@@ -45,7 +43,6 @@ from mywhisper.ui.widgets.transcript_view import (
     LISTENING_LIVE,
     LISTENING_RECORD,
     TranscriptView,
-    clock,
 )
 from mywhisper.ui.widgets.waveform import WaveformView
 from mywhisper.ui.workers import ModelWorker
@@ -73,7 +70,6 @@ ENGINE_SETTINGS = {"device", "compute_type", "cpu_threads", "models_dir", "allow
 
 AUDIO_FILTER = "Audio / vidéo (*.wav *.mp3 *.m4a *.flac *.ogg *.opus *.aac *.wma *.mp4 *.mkv *.webm);;Tous (*)"
 AUDIO_SUFFIXES = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".aac", ".wma", ".mp4", ".mkv", ".webm"}
-MIN_RECORDING_S = 0.3
 LEVEL_INTERVAL_MS = 33
 
 
@@ -82,22 +78,15 @@ class MainWindow(QMainWindow):
     hotkey_changed = Signal(str)
     theme_tokens_changed = Signal(object)  # theme.Tokens
     install_runtime_requested = Signal()
+    session_finished = Signal(object)  # SessionResult, for the history
 
     def __init__(self, settings: Settings, worker: ModelWorker, device_description: str) -> None:
         super().__init__()
         self.settings = settings
         self.worker = worker
-        self.recorder = MicRecorder(settings.input_device)
+        self.session = SessionController(settings, worker)
         self.tokens = theme.resolve(settings.theme)
-        self.segments: list[Segment] = []
-        self.source_name = "transcription"
-        self.busy = False  # file / recording transcription in progress
-        self.live = False  # live session running (or finishing its final pass)
-        self.live_stopping = False
-        self.model_ready = False
-        self.model_loading = False
         self.record_seconds = 0.0
-        self._duration = 0.0
         # set by app.py when the tray icon and the universal dictation are available
         self.dictation = None
         self.hook = None
@@ -112,13 +101,13 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(720, 600)
         self.setAcceptDrops(True)
         self._build_ui(device_description)
-        self._connect_worker()
+        self._connect_session()
         self._apply_icons()
 
         self.level_timer = QTimer(self, interval=LEVEL_INTERVAL_MS)
         self.level_timer.timeout.connect(self._update_level)
         QGuiApplication.styleHints().colorSchemeChanged.connect(lambda _: self._theme_changed())
-        self.worker.request_load.emit(self.settings.model_key)
+        self.session.load_model(self.settings.model_key)
 
     # ---- construction -------------------------------------------------
 
@@ -226,7 +215,7 @@ class MainWindow(QMainWindow):
         self.clear_button.clicked.connect(self._clear)
         self.cancel_button = QPushButton("Annuler")
         self.cancel_button.setObjectName("OutlineButton")
-        self.cancel_button.clicked.connect(self.worker.cancel)
+        self.cancel_button.clicked.connect(lambda: self.session.cancel())
         self.cancel_button.hide()
         self.status_label = QLabel("")
         self.status_label.setProperty("mono", True)
@@ -298,17 +287,20 @@ class MainWindow(QMainWindow):
         self.addAction(QAction(self, shortcut=QKeySequence.StandardKey.Quit, triggered=self.close))
         self._update_controls()
 
-    def _connect_worker(self) -> None:
-        w = self.worker
-        w.model_loading.connect(self._on_model_loading)
-        w.model_loaded.connect(self._on_model_loaded)
-        w.model_downloading.connect(self._on_model_downloading)
-        w.transcription_started.connect(self._on_started)
-        w.segment_ready.connect(self._on_segment)
-        w.transcription_finished.connect(self._on_finished)
-        w.live_update.connect(self._on_live_update)
-        w.live_finished.connect(self._on_live_finished)
-        w.error.connect(self._on_error)
+    def _connect_session(self) -> None:
+        s = self.session
+        s.changed.connect(self._update_controls)
+        s.status.connect(self._status)
+        s.error.connect(self._on_error)
+        s.capture_started.connect(self._on_capture_started)
+        s.capture_stopped.connect(self._stop_meter)
+        s.transcription_started.connect(self._on_transcription_started)
+        s.segment_added.connect(self._on_segment)
+        s.live_updated.connect(self.transcript.live_update)
+        s.finished.connect(self._on_finished)
+        s.model_loading.connect(self._on_model_loading)
+        s.model_downloading.connect(self._on_model_downloading)
+        s.model_loaded.connect(self._on_model_loaded)
 
     # ---- theme ---------------------------------------------------------
 
@@ -410,8 +402,7 @@ class MainWindow(QMainWindow):
     def _apply_engine_settings(self) -> None:
         """Device, precision, threads or models folder changed: reload the model."""
         device = rocm_env.detect_device(self.settings.device, self.settings.compute_type)
-        self.model_ready = False
-        self.worker.reconfigure(
+        self.session.reconfigure(
             self.settings.model_key,
             device=device,
             cpu_threads=self.settings.cpu_threads,
@@ -462,11 +453,6 @@ class MainWindow(QMainWindow):
             self.save_settings()
             self._rerender()
 
-    def _apply_vocabulary(self, segment: Segment) -> Segment:
-        if not self.settings.replacements:
-            return segment
-        return replace(segment, text=apply_replacements(segment.text, self.settings.replacements))
-
     def _theme_changed(self) -> None:
         self.tokens = theme.resolve(self.settings.theme)
         theme.apply(QApplication.instance(), self.tokens)
@@ -497,125 +483,77 @@ class MainWindow(QMainWindow):
     # ---- capture -------------------------------------------------------
 
     def _shortcut_capture(self, mode: str) -> None:
-        if self.idle and not self.recorder.is_recording:
+        if self.session.available:
             self.mode_control.set_value(mode)
         self._toggle_capture()
 
     def _toggle_capture(self) -> None:
+        session = self.session
         dictating = self.dictation is not None and self.dictation.state != "idle"
-        if dictating and self.idle and not self.recorder.is_recording:
+        if dictating and session.available:
             self._status("Dictée en cours…", 3000)
             return
-        if self.live:
-            self._toggle_live()
-        elif self.recorder.is_recording:
-            self._toggle_recording()
+        if session.live:
+            session.stop_live()
+        elif session.recording:
+            session.stop_recording()
         elif self.mode_control.value() == "live":
-            self._toggle_live()
+            self._start_live()
         else:
-            self._toggle_recording()
+            session.start_recording()
 
-    def _start_microphone(self) -> bool:
-        self.recorder.device_name = self.settings_popover.mic_combo.currentData()
-        try:
-            self.recorder.start()
-        except Exception as exc:
-            log.exception("Microphone start failed")
-            self.transcript.show_error(f"Impossible d'ouvrir le micro : {exc}")
-            return False
-        self.transcript.hide_error()
-        self.record_seconds = 0.0
-        self.waveform.set_active(True)
-        self.level_timer.start()
-        return True
-
-    def _stop_meter(self) -> None:
-        self.level_timer.stop()
-        self.waveform.set_active(False)
-
-    def _toggle_recording(self) -> None:
-        if self.recorder.is_recording:
-            self._stop_meter()
-            audio = self.recorder.stop()
-            self._update_controls()
-            if audio.size < MIN_RECORDING_S * SAMPLE_RATE:
-                if not self.segments:
-                    self.transcript.show_empty()
-                self._status("Enregistrement trop court.", 4000)
-                return
-            self.source_name = "dictee"
-            self._start_transcription(audio)
+    def _start_live(self) -> None:
+        if not self.session.start_live():
             return
-        if self._start_microphone():
-            if not self.segments:
-                self.transcript.show_empty(LISTENING_RECORD)
-            self._status("Enregistrement…")
-            self._update_controls()
-
-    def _toggle_live(self) -> None:
-        if self.live:
-            self.live_stopping = True
-            self._status("Fin du direct…")
-            self.worker.stop_live()
-            self._update_controls()
-            return
-        if not self._start_microphone():
-            return
-        self.live = True
-        self.segments = []
-        self.transcript.clear()
-        self.transcript.show_empty(LISTENING_LIVE)
-        self.source_name = "direct"
-        self._update_controls()
         message = "Parlez, le texte s'affiche au fil de l'eau."
         if self.cpu_notice is not None:
             message = "Sur le processeur, le texte arrive avec plusieurs secondes de retard."
         elif self.model_control.value() != "turbo":
             message = "Modèle précis : latence plus élevée en direct."
         self._status(message)
-        self.worker.live_config = live_config(self.settings)
-        self.worker.start_live(self.recorder, transcribe_options(self.settings, LIVE))
+
+    def _on_capture_started(self, kind: str) -> None:
+        self.transcript.hide_error()
+        if kind == RECORD:
+            if not self.segments:
+                self.transcript.show_empty(LISTENING_RECORD)
+        else:
+            self.transcript.clear()
+            self.transcript.show_empty(LISTENING_LIVE)
+        self.record_seconds = 0.0
+        self.waveform.set_active(True)
+        self.level_timer.start()
+
+    def _stop_meter(self) -> None:
+        self.level_timer.stop()
+        self.waveform.set_active(False)
 
     def _update_level(self) -> None:
-        self.waveform.push(self.recorder.level)
+        self.waveform.push(self.session.recorder.level)
         self.record_seconds += LEVEL_INTERVAL_MS / 1000
         self.timer_label.setText(clock(self.record_seconds))
 
     # ---- files and transcription ---------------------------------------
 
     def _open_file(self) -> None:
-        if not self.idle or self.recorder.is_recording:
+        if not self.session.available:
             return
         path, _ = QFileDialog.getOpenFileName(self, "Importer un fichier audio", "", AUDIO_FILTER)
         if path:
-            self._transcribe_file(Path(path))
-
-    def _transcribe_file(self, path: Path) -> None:
-        if not self.idle or self.recorder.is_recording:
-            return
-        self.source_name = path.stem
-        self._start_transcription(path)
-
-    def _start_transcription(self, audio: AudioSource) -> None:
-        self.segments = []
-        self.transcript.clear()
-        self.transcript.hide_error()
-        self.transcript.set_progress(0.0)
-        self.busy = True
-        self._duration = 0.0
-        self._update_controls()
-        self._status("Analyse de l'audio…" if self.model_ready else "En attente du modèle…")
-        self.worker.transcribe(audio, transcribe_options(self.settings, FILE))
+            self.session.transcribe_file(Path(path))
 
     def _model_changed(self, key: str) -> None:
         self._set_setting("model_key", key)
-        self.model_ready = False
-        self.worker.request_load.emit(key)
+        self.session.load_model(key)
 
     def _retry_model(self) -> None:
-        self.worker.request_load.emit(self.model_control.value())
+        self.session.load_model(self.model_control.value())
 
     # ---- results -------------------------------------------------------
+
+    @property
+    def segments(self) -> list[Segment]:
+        return self.session.segments
 
     def _copy(self, style: str = "plain") -> None:
         if style == "timestamps":
@@ -623,7 +561,7 @@ class MainWindow(QMainWindow):
         elif style == "markdown":
             text = MarkdownExporter().render(self.segments)
         else:
-            text = self._plain_text()
+            text = "\n".join(s.text for s in self.segments)
         QGuiApplication.clipboard().setText(text)
         self.toast.show_message("Texte copié")
 
@@ -632,7 +570,10 @@ class MainWindow(QMainWindow):
             return
         exporter = next(e for e in export.exporters() if e.suffix == suffix)
         path, _ = QFileDialog.getSaveFileName(
-            self, "Exporter la transcription", f"{self.source_name}{suffix}", f"{exporter.label} (*{suffix})"
+            self,
+            "Exporter la transcription",
+            f"{self.session.source_name}{suffix}",
+            f"{exporter.label} (*{suffix})",
         )
         if not path:
             return
@@ -652,87 +593,56 @@ class MainWindow(QMainWindow):
         self.toast.show_message(f"Exporté vers {target.name}")
 
     def _clear(self) -> None:
-        self.segments = []
+        self.session.clear()
         self.transcript.clear()
         self.transcript.show_empty()
-        self._status("")
-        self._update_controls()
 
     def _rerender(self) -> None:
-        if not self.live and self.segments:
-            self.transcript.render(self.segments, self.settings_popover.timestamps_check.isChecked())
+        if not self.session.live and self.segments:
+            self.transcript.render(self.segments, self._timestamps())
 
-    # ---- worker callbacks ---------------------------------------------
+    def _timestamps(self) -> bool:
+        return self.settings_popover.timestamps_check.isChecked()
+
+    # ---- session callbacks ---------------------------------------------
 
     def _on_model_loading(self, label: str) -> None:
-        self.model_loading = True
-        self.model_ready = False
-        if not self.segments and not self.busy:
+        if not self.segments and not self.session.busy:
             self.transcript.show_loading(label)
-        self._status("Chargement du modèle…")
-        self._update_controls()
 
     def _on_model_downloading(self, model_name: str, done: int, total: int) -> None:
         size = f"{done / 1024**3:.1f} / {total / 1024**3:.1f} Go".replace(".", ",")
-        if not self.segments and not self.busy:
+        if not self.segments and not self.session.busy:
             self.transcript.show_loading_text(f"Premier lancement : téléchargement de {model_name}… {size}")
             self.transcript.set_progress(done / total if total else None)
         self._status(f"Téléchargement du modèle · {done * 100 // max(total, 1)} %")
 
     def _on_model_loaded(self, key: str, device_description: str) -> None:
-        self.model_loading = False
-        self.model_ready = True
-        if not self.busy:
+        if not self.session.busy:
             self.transcript.set_progress(None)
         self.device_chip.setText(device_description)
-        if not self.segments and not self.busy:
+        if not self.segments and not self.session.busy:
             self.transcript.show_empty()
         self._status(f"Modèle {MODELS[key].model_name} prêt.", 4000)
-        self._update_controls()
 
-    def _on_started(self, info) -> None:
-        self._duration = info.duration
-        self._status(f"Transcription en cours ({info.language}, {clock(info.duration)})")
+    def _on_transcription_started(self) -> None:
+        self.transcript.clear()
+        self.transcript.hide_error()
+        self.transcript.set_progress(0.0)
 
-    def _on_segment(self, segment: Segment) -> None:
-        segment = self._apply_vocabulary(segment)
-        self.segments.append(segment)
-        self.transcript.append_segment(segment, self.settings_popover.timestamps_check.isChecked())
-        if self._duration:
-            self.transcript.set_progress(segment.end / self._duration)
-        self._update_controls()
+    def _on_segment(self, segment: Segment, progress: float | None) -> None:
+        self.transcript.append_segment(segment, self._timestamps())
+        if progress is not None:
+            self.transcript.set_progress(progress)
 
-    def _on_live_update(self, update: LiveUpdate, pass_seconds: float) -> None:
-        if not self.live:
-            return
-        committed = [self._apply_vocabulary(s) for s in update.committed]
-        self.segments.extend(committed)
-        self.transcript.live_update(committed, update.provisional)
-        if pass_seconds:
-            self._status(f"passe {pass_seconds:.2f} s")
-        self._update_controls()
-
-    def _on_live_finished(self) -> None:
-        self.live = False
-        self.live_stopping = False
-        self._stop_meter()
-        self.recorder.stop()
-        self.segments = merge_sentences(self.segments)
-        self.transcript.render(self.segments, self.settings_popover.timestamps_check.isChecked())
-        self._status(f"Direct terminé · {len(self.segments)} phrase(s)", 6000)
-        self._update_controls()
-
-    def _on_finished(self, elapsed: float, duration: float, cancelled: bool) -> None:
-        self.busy = False
+    def _on_finished(self, result: SessionResult | None) -> None:
         self.transcript.set_progress(None)
-        if not self.segments:
+        if result is not None and result.kind == LIVE_KIND:
+            self.transcript.render(self.segments, self._timestamps())
+        elif not self.segments:
             self.transcript.show_empty()
-        self._update_controls()
-        if cancelled:
-            self._status("Transcription annulée.", 5000)
-            return
-        speed = f" · {duration / elapsed:.0f}× temps réel" if elapsed and duration else ""
-        self._status(f"{clock(duration)} transcrit en {elapsed:.1f} s{speed}")
+        if result is not None:
+            self.session_finished.emit(result)
 
     # ---- CPU fallback ----------------------------------------------------
 
@@ -745,22 +655,17 @@ class MainWindow(QMainWindow):
         action = "Installer l'accélération" if notice.install_variant else None
         self.notice.show_notice(notice.title, notice.detail, action)
 
-    def _on_error(self, message: str) -> None:
-        failed_load = self.model_loading
-        self.model_loading = False
-        self.busy = False
+    def _on_error(self, message: str, failed_load: bool) -> None:
         self.transcript.set_progress(None)
         if not self.segments:
             self.transcript.show_empty()
         self.transcript.show_error(message, "Réessayer" if failed_load else None)
-        self._status("")
-        self._update_controls()
 
     # ---- helpers ------------------------------------------------------
 
     @property
     def idle(self) -> bool:
-        return not (self.busy or self.live)
+        return self.session.idle
 
     def status_text(self) -> str:
         return self.status_label.text()
@@ -770,24 +675,21 @@ class MainWindow(QMainWindow):
         if timeout_ms:
             QTimer.singleShot(timeout_ms, lambda: self.status_label.text() == text and self.status_label.setText(""))
 
-    def _plain_text(self) -> str:
-        return "\n".join(s.text for s in self.segments)
-
     def _update_controls(self) -> None:
-        recording = self.recorder.is_recording and not self.live
-        capturing = recording or self.live
-        self.record_button.set_loading(self.model_loading and not capturing)
+        s = self.session
+        capturing = s.capturing
+        self.record_button.set_loading(s.model_loading_now and not capturing)
         self.record_button.set_active(capturing)
         if capturing:
-            self.record_button.setEnabled(not self.live_stopping)  # stays clickable to stop
+            self.record_button.setEnabled(not s.live_stopping)  # stays clickable to stop
         else:
-            self.record_button.setEnabled(not self.model_loading and not self.busy)
-        self.mode_control.setEnabled(self.idle and not recording)
-        self.model_control.setEnabled(self.idle and not recording)
+            self.record_button.setEnabled(not s.model_loading_now and not s.busy)
+        self.mode_control.setEnabled(s.available)
+        self.model_control.setEnabled(s.available)
         self.language_combo.setEnabled(not capturing)
-        self.import_button.setEnabled(self.idle and not recording)
-        self.cancel_button.setVisible(self.busy)
-        self.live_chip.setVisible(self.live)
+        self.import_button.setEnabled(s.available)
+        self.cancel_button.setVisible(s.busy)
+        self.live_chip.setVisible(s.live)
         if not capturing:
             self.timer_label.setText("00:00")
         has_text = bool(self.segments)
@@ -804,7 +706,7 @@ class MainWindow(QMainWindow):
         return None
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
-        if self._audio_url(event) and self.idle and not self.recorder.is_recording:
+        if self._audio_url(event) and self.session.available:
             event.acceptProposedAction()
             self.transcript.set_drag_active(True)
 
@@ -815,7 +717,7 @@ class MainWindow(QMainWindow):
         self.transcript.set_drag_active(False)
         path = self._audio_url(event)
         if path:
-            self._transcribe_file(path)
+            self.session.transcribe_file(path)
 
     def _open_settings(self) -> None:
         self._sync_popover()
@@ -832,9 +734,7 @@ class MainWindow(QMainWindow):
             self.save_settings()
             self.hidden_to_tray.emit()
             return
-        self.worker.stop_live()
-        if self.recorder.is_recording:
-            self.recorder.stop()
+        self.session.shutdown()
         self.save_settings()
         self.worker.shutdown()
         super().closeEvent(event)

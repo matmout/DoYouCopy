@@ -144,10 +144,10 @@ def wait_until(app, predicate, timeout_ms=5000):
 
 def test_progressive_transcription(app, make_window):
     window = make_window(FakeEngine())
-    wait_until(app, lambda: window.model_ready)
-    window._start_transcription(Path("x.wav"))
-    assert window.busy and window.cancel_button.isVisibleTo(window)
-    wait_until(app, lambda: not window.busy)
+    wait_until(app, lambda: window.session.model_ready)
+    window.session.transcribe_file(Path("x.wav"))
+    assert window.session.busy and window.cancel_button.isVisibleTo(window)
+    wait_until(app, lambda: not window.session.busy)
     assert window.segments == SEGMENTS
     assert window.transcript.displayed_text() == "Premier segment.\nSecond segment."
     assert window.export_button.isEnabled()
@@ -160,20 +160,20 @@ def test_cancel_stops_after_current_segment(app, make_window):
     engine = FakeEngine()
     engine.release.clear()
     window = make_window(engine)
-    wait_until(app, lambda: window.model_ready)
-    window._start_transcription(Path("x.wav"))
+    wait_until(app, lambda: window.session.model_ready)
+    window.session.transcribe_file(Path("x.wav"))
     window.worker.cancel()
     engine.release.set()
-    wait_until(app, lambda: not window.busy)
+    wait_until(app, lambda: not window.session.busy)
     assert len(window.segments) <= 1
     assert "annulée" in window.status_text()
 
 
 def test_error_shows_inline_banner(app, make_window):
     window = make_window(FakeEngine(fail=True))
-    wait_until(app, lambda: window.model_ready)
-    window._start_transcription(Path("x.wav"))
-    wait_until(app, lambda: not window.busy)
+    wait_until(app, lambda: window.session.model_ready)
+    window.session.transcribe_file(Path("x.wav"))
+    wait_until(app, lambda: not window.session.busy)
     banner = window.transcript.banner
     assert banner.isVisibleTo(window) and "boom" in banner.message.text()
     assert not banner.action_button.isVisibleTo(window)  # nothing to retry
@@ -187,45 +187,45 @@ def test_model_load_failure_offers_retry(app, make_window):
     wait_until(app, lambda: banner.isVisibleTo(window))
     assert "cache vide" in banner.message.text() and banner.action_button.isVisibleTo(window)
     banner.action_button.click()
-    wait_until(app, lambda: window.model_ready)
+    wait_until(app, lambda: window.session.model_ready)
     assert engine.attempts == 2 and not banner.isVisibleTo(window)
 
 
 def test_live_mode(app, make_window):
     window = make_window(FakeEngine(), live_factory=FakeLive)
-    window.recorder = FakeRecorder()
-    wait_until(app, lambda: window.model_ready)
+    window.session.recorder = FakeRecorder()
+    wait_until(app, lambda: window.session.model_ready)
 
-    window._toggle_live()
-    assert window.live and window.record_button.active and window.record_button.isEnabled()
+    window._start_live()
+    assert window.session.live and window.record_button.active and window.record_button.isEnabled()
     assert not window.import_button.isEnabled() and not window.mode_control.isEnabled()
     assert window.live_chip.isVisibleTo(window)
     wait_until(app, lambda: len(window.segments) == 2)
     wait_until(app, lambda: window.transcript.displayed_text() == "Bonjour tout le monde.\nCeci est")
 
-    window._toggle_live()  # stop: final pass, then controls come back
-    wait_until(app, lambda: not window.live)
+    window.session.stop_live()  # stop: final pass, then controls come back
+    wait_until(app, lambda: not window.session.live)
     assert [s.text for s in window.segments] == ["Bonjour tout le monde.", "Ceci est un test."]
     assert window.transcript.displayed_text() == "Bonjour tout le monde.\nCeci est un test."
-    assert not window.recorder.is_recording and not window.record_button.active
+    assert not window.session.recorder.is_recording and not window.record_button.active
     assert window.record_button.isEnabled() and window.mode_control.isEnabled()
     assert window.export_button.isEnabled() and not window.live_chip.isVisibleTo(window)
 
 
 def test_shortcut_selects_mode_then_captures(app, make_window):
     window = make_window(FakeEngine(), live_factory=FakeLive)
-    window.recorder = FakeRecorder()
-    wait_until(app, lambda: window.model_ready)
+    window.session.recorder = FakeRecorder()
+    wait_until(app, lambda: window.session.model_ready)
     window._shortcut_capture("live")
-    assert window.mode_control.value() == "live" and window.live
+    assert window.mode_control.value() == "live" and window.session.live
     window._shortcut_capture("record")  # while live: stops the session, mode unchanged
-    wait_until(app, lambda: not window.live)
+    wait_until(app, lambda: not window.session.live)
     assert window.mode_control.value() == "live"
 
 
 def test_copy_as_timestamps_and_markdown(app, make_window):
     window = make_window(FakeEngine())
-    window.segments = list(SEGMENTS)
+    window.session.segments = list(SEGMENTS)
     window._copy("timestamps")
     assert app.clipboard().text() == "[00:00] Premier segment.\n[00:01] Second segment."
     window._copy("markdown")
@@ -242,8 +242,8 @@ def test_replacements_and_hotwords_apply_to_transcription(app, make_window):
     window = make_window(engine)
     window.settings.replacements = [["segment", "passage"]]
     window.settings.hotwords = ["ROCm", "Radeon"]
-    wait_until(app, lambda: window.model_ready)
-    window._start_transcription(Path("x.wav"))
+    wait_until(app, lambda: window.session.model_ready)
+    window.session.transcribe_file(Path("x.wav"))
     wait_until(app, lambda: window.idle)
     assert [s.text for s in window.segments] == ["Premier passage.", "Second passage."]
     assert seen[0].hotwords == "ROCm, Radeon" and seen[0].word_timestamps

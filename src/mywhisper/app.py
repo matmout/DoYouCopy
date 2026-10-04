@@ -145,7 +145,7 @@ def setup_dictation(app, window, settings: Settings, worker):
         worker,
         hook=hook,
         overlay=overlay,
-        is_app_busy=lambda: not window.idle or window.recorder.is_recording,
+        is_app_busy=lambda: not window.session.available,
     )
     window.attach_dictation(controller, hook)
     tray = TrayIcon(window.tokens, settings.dictation_hotkey, settings.dictation_enabled, app)

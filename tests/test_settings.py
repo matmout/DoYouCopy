@@ -228,7 +228,7 @@ def test_default_export_and_subtitle_settings(window, tmp_path, monkeypatch):
 
     window.settings.default_export = ".srt"
     window.settings.subtitle_max_chars = 20
-    window.segments = [Segment(0, 4, "Une phrase de taille moyenne pour un sous-titre court")]
+    window.session.segments = [Segment(0, 4, "Une phrase de taille moyenne pour un sous-titre court")]
     target = tmp_path / "out.srt"
     monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *a, **k: (str(target), ""))
     window._export(window.settings.default_export)

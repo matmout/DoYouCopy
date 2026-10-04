@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from mywhisper.core.live import SENTENCE_END
 from mywhisper.core.types import Segment, Word
+from mywhisper.session import clock
 from mywhisper.ui import theme
 from mywhisper.ui.theme import Tokens
 
@@ -29,11 +30,6 @@ LISTENING_RECORD = ("À l'écoute", "Cliquez à nouveau sur le bouton pour arrê
 LISTENING_LIVE = ("À l'écoute", "Le texte apparaîtra dès les premiers mots.")
 READING_CHARS = 72
 LINE_HEIGHT = 155  # percent
-
-
-def clock(seconds: float) -> str:
-    minutes, secs = divmod(int(seconds), 60)
-    return f"{minutes:02d}:{secs:02d}"
 
 
 class _ReadingEdit(QTextEdit):
