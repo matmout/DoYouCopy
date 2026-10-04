@@ -60,7 +60,7 @@ class ModelWorker(QObject):
     request_unload = Signal()  # blocking: the caller waits until the model is freed
 
     model_loading = Signal(str)  # model label
-    model_downloading = Signal(str, int, int)  # model name, done bytes, total bytes
+    model_downloading = Signal(str, object, object)  # model name, done bytes, total bytes (object: Qt int is 32-bit, models exceed 2 GB)
     model_loaded = Signal(str, str)  # model key, device description
     transcription_started = Signal(object)  # TranscriptionInfo
     segment_ready = Signal(object)  # Segment

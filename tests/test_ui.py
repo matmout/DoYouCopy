@@ -319,6 +319,14 @@ def test_model_download_progress_is_shown(app, make_window):
     assert "50 %" in window.status_text()
 
 
+def test_model_download_progress_survives_sizes_over_2_gb(app, make_window):
+    """A Qt int signal is 32-bit: large-v3 (3.1 Go) came out as -1,1 Go and 96364373800 %."""
+    window = make_window(FakeEngine())
+    window.session.model_downloading.emit("large-v3", 2 * 1024**3, int(3.1 * 1024**3))
+    assert "2,0 / 3,1 Go" in window.transcript.skeleton.label.text()
+    assert "64 %" in window.status_text()
+
+
 def test_runtime_dialog_install_flow(app, monkeypatch):
     from mywhisper.runtime import install
     from mywhisper.runtime.gpu_detect import Adapter, Detection

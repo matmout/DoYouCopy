@@ -74,7 +74,7 @@ class SessionController(QObject):
     finished = Signal(object)  # SessionResult, or None (cancelled, too short, failed)
     segments_edited = Signal()  # the current segments changed after the fact (edit, re-transcription)
     model_loading = Signal(str)  # model label
-    model_downloading = Signal(str, int, int)  # model name, done bytes, total bytes
+    model_downloading = Signal(str, object, object)  # model name, done bytes, total bytes (object: Qt int is 32-bit, models exceed 2 GB)
     model_loaded = Signal(str, str)  # model key, device description
 
     def __init__(self, settings: Settings, worker, recorder=None, recorder_factory=make_recorder) -> None:

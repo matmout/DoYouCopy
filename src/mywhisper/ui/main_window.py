@@ -733,7 +733,7 @@ class MainWindow(QMainWindow):
         if not self.segments and not self.session.busy:
             self.transcript.show_loading_text(f"Premier lancement : téléchargement de {model_name}… {size}")
             self.transcript.set_progress(done / total if total else None)
-        self._status(f"Téléchargement du modèle · {done * 100 // max(total, 1)} %")
+        self._status(f"Téléchargement du modèle · {min(100, done * 100 // max(total, 1))} %")
 
     def _on_model_loaded(self, key: str, device_description: str) -> None:
         self.loaded_model = MODELS[key].model_name

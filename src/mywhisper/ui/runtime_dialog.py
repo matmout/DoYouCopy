@@ -21,7 +21,7 @@ def gigabytes(size: int) -> str:
 
 
 class _InstallJob(QObject):
-    progress = Signal(str, int, int)
+    progress = Signal(str, object, object)  # stage, done, total bytes (object: Qt int is 32-bit)
     finished = Signal(bool, str)  # GPU usable, message
 
     def __init__(self, package: RuntimePackage, cancel: threading.Event, probe=startup.probe_subprocess) -> None:
@@ -152,7 +152,7 @@ class RuntimeSetupDialog(QDialog):
             self.status.setText(f"Téléchargement · {gigabytes(done)} / {gigabytes(total)}")
         elif stage == "extract":
             self.progress.setValue(int(done / max(total, 1) * 1000))
-            self.status.setText(f"Installation · {done * 100 // max(total, 1)} %")
+            self.status.setText(f"Installation · {min(100, done * 100 // max(total, 1))} %")
         else:
             self.progress.setRange(0, 0)  # indeterminate while the card is tested
             self.status.setText("Vérification de la carte graphique…")
