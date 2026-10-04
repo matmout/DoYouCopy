@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import fnmatch
 import json
+import os
 import shutil
 import threading
 from collections.abc import Callable
@@ -107,26 +108,49 @@ def installed_size(models_dir: Path, model_name: str) -> int:
     if is_complete(plain):
         total += sum(f.stat().st_size for f in plain.rglob("*") if f.is_file())
     for snapshot in _snapshots(models_dir, model_name):
-        # files are symlinks to content-addressed blobs: stat() follows them
-        total += sum(f.stat().st_size for f in snapshot.iterdir() if f.is_file())
+        total += sum(_file_size(f) for f in snapshot.iterdir())
     return total
 
 
 def _snapshots(models_dir: Path, model_name: str) -> list[Path]:
     cache = hf_cache_dir(models_dir, model_name)
-    return [m.parent for m in cache.glob("snapshots/*/model.bin") if m.exists()]
+    # lstat only: the entries are symlinks that Windows may refuse to follow
+    return [m.parent for m in cache.glob("snapshots/*/model.bin") if m.is_symlink() or m.is_file()]
+
+
+def _link_target(link: Path) -> Path:
+    """Where a symlink points, read without following it.
+
+    Windows can refuse to traverse a symlink (WinError 448, untrusted mount point,
+    e.g. a Hugging Face cache created by another process): stat() and resolve() fail
+    then, but the link itself and the blob it names can still be read."""
+    target = Path(os.readlink(link))
+    return Path(os.path.abspath(target if target.is_absolute() else link.parent / target))
+
+
+def _file_size(path: Path) -> int:
+    """Size of a file or of the blob a snapshot symlink points to; 0 if unreadable."""
+    try:
+        if path.is_symlink():
+            path = _link_target(path)
+        return path.stat().st_size if path.is_file() else 0
+    except OSError:
+        return 0
 
 
 def discard(models_dir: Path, model_name: str) -> None:
     """Deletes the model in both layouts, including the shared blobs it points to."""
     shutil.rmtree(local_dir(models_dir, model_name), ignore_errors=True)
     cache = hf_cache_dir(models_dir, model_name)
-    root = models_dir.resolve()
+    root = Path(os.path.abspath(models_dir))
     for link in [*cache.glob("snapshots/*/*"), *cache.glob("blobs/*")]:
         if not link.is_symlink():
             continue
-        target = link.resolve()
-        if target != link and root in target.parents:
+        try:
+            target = _link_target(link)
+        except OSError:
+            continue
+        if root in target.parents:
             target.unlink(missing_ok=True)
             target.with_name(target.name + ".refs").unlink(missing_ok=True)
     shutil.rmtree(cache, ignore_errors=True)

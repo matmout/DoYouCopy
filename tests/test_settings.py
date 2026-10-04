@@ -151,6 +151,33 @@ def test_installed_size_and_discard(tmp_path):
     assert model_download.installed_size(tmp_path, "large-v3") == 0
 
 
+def test_installed_size_and_discard_without_following_symlinks(tmp_path, monkeypatch):
+    # Windows may refuse to traverse the Hugging Face cache symlinks (WinError 448):
+    # the settings window must still open, with the size read from the blob.
+    cache = model_download.hf_cache_dir(tmp_path, "large-v3")
+    blob = cache / "blobs" / "e766"
+    blob.parent.mkdir(parents=True)
+    blob.write_bytes(b"z" * 700)
+    snapshot = cache / "snapshots" / "abc"
+    snapshot.mkdir(parents=True)
+    try:
+        os.symlink(Path("..", "..", "blobs", "e766"), snapshot / "model.bin")
+    except OSError:
+        pytest.skip("symlinks not allowed here")
+    real_stat = Path.stat
+
+    def stat(self, *, follow_symlinks=True):
+        if follow_symlinks and self.is_symlink():
+            raise OSError(448, "untrusted mount point")
+        return real_stat(self, follow_symlinks=follow_symlinks)
+
+    monkeypatch.setattr(Path, "stat", stat)
+    monkeypatch.setattr(Path, "resolve", lambda self, strict=False: stat(self) and self)
+    assert model_download.installed_size(tmp_path, "large-v3") == 700
+    model_download.discard(tmp_path, "large-v3")
+    assert not blob.exists() and not cache.exists()
+
+
 # ---- settings window -----------------------------------------------------------------
 
 
