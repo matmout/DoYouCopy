@@ -26,6 +26,7 @@ from mywhisper.config import Settings
 from mywhisper.core.live import LiveUpdate, merge_sentences
 from mywhisper.core.models import MODELS
 from mywhisper.core.types import SAMPLE_RATE, AudioSource, Segment, TranscribeOptions
+from mywhisper.export.markdown import MarkdownExporter, timecode
 from mywhisper.ui import theme
 from mywhisper.ui.widgets.record_button import RecordButton
 from mywhisper.ui.widgets.segmented import SegmentedControl
@@ -174,8 +175,16 @@ class MainWindow(QMainWindow):
         card_row.addWidget(self.transcript)
 
         # bottom bar: actions, status, device
-        self.copy_button = QPushButton("Copier")
-        self.copy_button.clicked.connect(self._copy)
+        self.copy_button = QToolButton()
+        self.copy_button.setText("Copier")
+        self.copy_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.copy_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        self.copy_button.clicked.connect(lambda: self._copy())
+        copy_menu = QMenu(self.copy_button)
+        copy_menu.addAction("Texte brut", self._copy)
+        copy_menu.addAction("Texte horodaté", lambda: self._copy("timestamps"))
+        copy_menu.addAction("Markdown", lambda: self._copy("markdown"))
+        self.copy_button.setMenu(copy_menu)
         self.export_button = QToolButton()
         self.export_button.setText("Exporter")
         self.export_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
@@ -399,6 +408,7 @@ class MainWindow(QMainWindow):
         options = TranscribeOptions(
             language=self.language_combo.currentData(),
             vad_filter=self.settings_popover.vad_check.isChecked(),
+            word_timestamps=True,  # precise subtitle cuts
         )
         self.worker.transcribe(audio, options)
 
@@ -411,8 +421,14 @@ class MainWindow(QMainWindow):
 
     # ---- results -------------------------------------------------------
 
-    def _copy(self) -> None:
-        QGuiApplication.clipboard().setText(self._plain_text())
+    def _copy(self, style: str = "plain") -> None:
+        if style == "timestamps":
+            text = "\n".join(f"[{timecode(s.start)}] {s.text}" for s in self.segments if s.text)
+        elif style == "markdown":
+            text = MarkdownExporter().render(self.segments)
+        else:
+            text = self._plain_text()
+        QGuiApplication.clipboard().setText(text)
         self.toast.show_message("Texte copié")
 
     def _export(self, suffix: str) -> None:

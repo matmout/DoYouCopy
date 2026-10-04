@@ -217,3 +217,14 @@ def test_shortcut_selects_mode_then_captures(app, make_window):
     window._shortcut_capture("record")  # while live: stops the session, mode unchanged
     wait_until(app, lambda: not window.live)
     assert window.mode_control.value() == "live"
+
+
+def test_copy_as_timestamps_and_markdown(app, make_window):
+    window = make_window(FakeEngine())
+    window.segments = list(SEGMENTS)
+    window._copy("timestamps")
+    assert app.clipboard().text() == "[00:00] Premier segment.\n[00:01] Second segment."
+    window._copy("markdown")
+    assert app.clipboard().text().startswith("*[00:00]* Premier segment.")
+    window._copy()
+    assert app.clipboard().text() == "Premier segment.\nSecond segment."

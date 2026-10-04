@@ -11,7 +11,7 @@ class Exporter(Protocol):
     suffix: str
     label: str
 
-    def render(self, segments: Sequence[Segment]) -> str: ...
+    def render(self, segments: Sequence[Segment]) -> str | bytes: ...
 
 
 _EXPORTERS: dict[str, Exporter] = {}
@@ -30,4 +30,8 @@ def export(path: Path, segments: Sequence[Segment]) -> None:
     exporter = _EXPORTERS.get(path.suffix.lower())
     if exporter is None:
         raise ValueError(f"Format non pris en charge : {path.suffix or '(aucune extension)'}")
-    path.write_text(exporter.render(segments), encoding="utf-8")
+    data = exporter.render(segments)
+    if isinstance(data, bytes):
+        path.write_bytes(data)
+    else:
+        path.write_text(data, encoding="utf-8")
