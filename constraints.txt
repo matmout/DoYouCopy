@@ -1,0 +1,4 @@
+# The ROCm build of CTranslate2 is installed from the GitHub release zip
+# (see scripts/install_rocm.ps1). Pinning the version keeps pip from
+# replacing it with the CUDA build published on PyPI.
+ctranslate2==4.8.2
