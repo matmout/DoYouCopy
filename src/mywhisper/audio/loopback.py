@@ -19,6 +19,7 @@ from ctypes import POINTER, byref, c_uint32, c_uint64, c_void_p, wintypes
 import numpy as np
 
 from mywhisper.audio.recorder import resample
+from mywhisper.desktop.com import CLSCTX_ALL, COINIT_MULTITHREADED, GUID, Com
 
 log = logging.getLogger(__name__)
 
@@ -30,8 +31,6 @@ SUBTYPE_IEEE_FLOAT = uuid.UUID("00000003-0000-0010-8000-00aa00389b71")
 SUBTYPE_PCM = uuid.UUID("00000001-0000-0010-8000-00aa00389b71")
 
 E_RENDER, E_CONSOLE = 0, 0
-CLSCTX_ALL = 0x17
-COINIT_MULTITHREADED = 0x0
 SHAREMODE_SHARED = 0
 STREAMFLAGS_LOOPBACK = 0x00020000
 BUFFERFLAGS_SILENT = 0x2
@@ -40,14 +39,6 @@ BUFFER_100NS = 2_000_000  # 200 ms of buffer in the audio engine
 POLL_S = 0.01
 FILL_AFTER_S = 0.1  # no packet for this long: nothing plays, write silence
 START_TIMEOUT_S = 3.0
-
-
-class GUID(ctypes.Structure):
-    _fields_ = [("Data1", wintypes.DWORD), ("Data2", wintypes.WORD), ("Data3", wintypes.WORD), ("Data4", ctypes.c_ubyte * 8)]
-
-    @classmethod
-    def of(cls, text: str) -> GUID:
-        return cls.from_buffer_copy(uuid.UUID(text).bytes_le)
 
 
 class WAVEFORMATEX(ctypes.Structure):
@@ -71,24 +62,6 @@ class WAVEFORMATEXTENSIBLE(ctypes.Structure):
         ("dwChannelMask", wintypes.DWORD),
         ("SubFormat", GUID),
     ]
-
-
-class _Com:
-    """A COM interface pointer: methods are called by their vtable index."""
-
-    def __init__(self, pointer: c_void_p) -> None:
-        self.ptr = pointer
-
-    def call(self, index: int, *args, argtypes=()):
-        vtable = ctypes.cast(self.ptr, POINTER(POINTER(c_void_p)))[0]
-        prototype = ctypes.WINFUNCTYPE(ctypes.HRESULT, c_void_p, *argtypes)
-        return prototype(vtable[index])(self.ptr, *args)  # raises OSError on a failed HRESULT
-
-    def release(self) -> None:
-        if self.ptr:
-            vtable = ctypes.cast(self.ptr, POINTER(POINTER(c_void_p)))[0]
-            ctypes.WINFUNCTYPE(wintypes.ULONG, c_void_p)(vtable[2])(self.ptr)
-            self.ptr = c_void_p()
 
 
 def sample_format(fmt: WAVEFORMATEX, address: int) -> str:
@@ -196,15 +169,15 @@ class LoopbackRecorder:
                 byref(GUID.of(CLSID_MMDeviceEnumerator)), None, CLSCTX_ALL,
                 byref(GUID.of(IID_IMMDeviceEnumerator)), byref(pointer),
             )
-            enumerator = _Com(pointer)
+            enumerator = Com(pointer)
             pointer = c_void_p()
             enumerator.call(4, E_RENDER, E_CONSOLE, byref(pointer),
                             argtypes=(ctypes.c_int, ctypes.c_int, POINTER(c_void_p)))  # GetDefaultAudioEndpoint
-            device = _Com(pointer)
+            device = Com(pointer)
             pointer = c_void_p()
             device.call(3, byref(GUID.of(IID_IAudioClient)), CLSCTX_ALL, None, byref(pointer),
                         argtypes=(POINTER(GUID), wintypes.DWORD, c_void_p, POINTER(c_void_p)))  # Activate
-            client = _Com(pointer)
+            client = Com(pointer)
             client.call(8, byref(mix_format), argtypes=(POINTER(c_void_p),))  # GetMixFormat
             fmt = WAVEFORMATEX.from_address(mix_format.value)
             dtype, channels, self._rate = sample_format(fmt, mix_format.value), fmt.nChannels, fmt.nSamplesPerSec
@@ -214,7 +187,7 @@ class LoopbackRecorder:
             pointer = c_void_p()
             client.call(14, byref(GUID.of(IID_IAudioCaptureClient)), byref(pointer),
                         argtypes=(POINTER(GUID), POINTER(c_void_p)))  # GetService
-            capture = _Com(pointer)
+            capture = Com(pointer)
             client.call(10)  # Start
             log.info("System audio capture: %d Hz, %d channel(s), %s", self._rate, channels, dtype)
             self._ready.set()
@@ -233,7 +206,7 @@ class LoopbackRecorder:
                 plain.CoTaskMemFree(mix_format)
             plain.CoUninitialize()
 
-    def _loop(self, capture: _Com, dtype: str, channels: int, block_align: int) -> None:
+    def _loop(self, capture: Com, dtype: str, channels: int, block_align: int) -> None:
         start = time.perf_counter()
         written = 0  # frames at the device rate since start
         data, frames, flags = POINTER(ctypes.c_ubyte)(), c_uint32(), wintypes.DWORD()

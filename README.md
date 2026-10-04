@@ -61,7 +61,7 @@ For example, on a Radeon RX 7800 XT, 15 s of speech is transcribed in about 1 se
 ## Installation
 
 1. Download `MyWhisper-Setup-<version>.exe` from the [Releases](https://github.com/matmout/Mywhisper/releases) page (Windows 10 / 11, 64-bit).
-2. Run it. **No administrator rights are needed**: it installs into your user profile.
+2. Run it. **No administrator rights are needed**: it installs into your user profile. You can add a Start menu shortcut (checked by default) and a Desktop shortcut; both can be changed later in **Settings → General → Shortcuts**.
 3. At the end of setup, MyWhisper detects your graphics card and downloads the matching acceleration (~1.2 GB, from official sources, with pinned versions and SHA-256 checks). It then tests the card for real.
 4. On first launch, the Turbo model (~1.6 GB) downloads with a progress bar. After that, no internet connection is needed.
 
@@ -82,10 +82,11 @@ powershell -ExecutionPolicy Bypass -File scripts\install_rocm.ps1
 
 It creates `.venv`, installs the ROCm runtime and the ROCm build of CTranslate2, installs MyWhisper, checks the GPU and downloads the models. To build the installer, use `scripts\build_installer.ps1` (needs [Inno Setup 6](https://jrsoftware.org/isinfo.php)).
 
-To run the tests:
+To run the tests and the static analysis:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m ruff check .
 ```
 
 </details>

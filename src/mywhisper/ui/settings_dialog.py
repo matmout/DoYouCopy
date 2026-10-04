@@ -39,6 +39,7 @@ from mywhisper import export
 from mywhisper.config import Settings
 from mywhisper.core import model_download
 from mywhisper.core.models import MODELS
+from mywhisper.desktop import shortcuts
 from mywhisper.dictation import autostart
 from mywhisper.dictation.hotkey import parse_hotkey
 from mywhisper.gpu import rocm_env
@@ -117,7 +118,7 @@ class SettingsDialog(QDialog):
         self.nav.setObjectName("SettingsNav")
         self.nav.setFixedWidth(170)
         self.pages = QStackedWidget()
-        for title, build in zip(
+        for title, build in zip(  # noqa: B905 (one builder per page title)
             PAGES,
             (
                 self._general,
@@ -257,6 +258,18 @@ class SettingsDialog(QDialog):
         startup.toggled.connect(self._autostart_toggled)
         self.autostart_check = startup
         form.addRow("", startup)
+
+        # Not settings: the state is the files themselves, also created by the installer.
+        form = self._section(layout, "Raccourcis")
+        self.shortcut_checks: dict[str, QCheckBox] = {}
+        for kind, label in ((shortcuts.DESKTOP, "Sur le Bureau"), (shortcuts.START_MENU, "Dans le menu Démarrer")):
+            check = QCheckBox(label)
+            check.setChecked(shortcuts.exists(kind))
+            check.setEnabled(shortcuts.available())
+            check.setToolTip(shortcuts.describe(kind))
+            check.toggled.connect(lambda enabled, kind=kind: self._shortcut_toggled(kind, enabled))
+            self.shortcut_checks[kind] = check
+            form.addRow("", check)
 
         reset = QPushButton("Rétablir les réglages par défaut…")
         reset.clicked.connect(self._confirm_reset)
@@ -641,7 +654,21 @@ class SettingsDialog(QDialog):
 
     def _autostart_toggled(self, enabled: bool) -> None:
         if not autostart.set_enabled(enabled):
+            self._revert(self.autostart_check, enabled)
             QMessageBox.warning(self, "Démarrage avec Windows", "Impossible de modifier le démarrage automatique.")
+
+    def _shortcut_toggled(self, kind: str, enabled: bool) -> None:
+        if not shortcuts.set_enabled(kind, enabled):
+            self._revert(self.shortcut_checks[kind], enabled)
+            action = "créer" if enabled else "supprimer"
+            QMessageBox.warning(self, "Raccourci", f"Impossible de {action} le raccourci dans {shortcuts.describe(kind)}.")
+
+    @staticmethod
+    def _revert(check: QCheckBox, attempted: bool) -> None:
+        """The checkbox shows what is really in place, not what was asked."""
+        check.blockSignals(True)
+        check.setChecked(not attempted)
+        check.blockSignals(False)
 
     def _confirm_reset(self) -> None:
         answer = QMessageBox.question(

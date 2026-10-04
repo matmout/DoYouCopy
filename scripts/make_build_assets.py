@@ -12,55 +12,10 @@ ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / "build"
 sys.path.insert(0, str(ROOT / "src"))
 
-from PySide6.QtCore import QRectF, QSize, Qt  # noqa: E402
-from PySide6.QtGui import QColor, QImage, QPainter  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from mywhisper import __version__  # noqa: E402
-from mywhisper.ui import theme  # noqa: E402
-
-SIZES = (16, 24, 32, 48, 64, 128, 256)
-
-
-def render(size: int) -> QImage:
-    """Microphone on a dark rounded square, in the app's accent colour."""
-    image = QImage(QSize(size, size), QImage.Format.Format_ARGB32)
-    image.fill(Qt.GlobalColor.transparent)
-    p = QPainter(image)
-    p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    p.setPen(Qt.PenStyle.NoPen)
-    p.setBrush(QColor(theme.DARK.bg))
-    radius = size * 0.22
-    p.drawRoundedRect(QRectF(0, 0, size, size), radius, radius)
-    icon = theme.icon("ph.microphone-fill", theme.DARK, "accent")
-    margin = round(size * 0.16)
-    icon.paint(p, margin, margin, size - 2 * margin, size - 2 * margin)
-    p.end()
-    return image
-
-
-def write_ico(path: Path) -> None:
-    """Multi-resolution .ico with PNG entries (supported since Windows Vista)."""
-    import struct
-
-    from PySide6.QtCore import QBuffer, QByteArray, QIODevice
-
-    pngs = []
-    for size in SIZES:
-        data = QByteArray()
-        buffer = QBuffer(data)
-        buffer.open(QIODevice.OpenModeFlag.WriteOnly)
-        render(size).save(buffer, "PNG")
-        pngs.append((size, bytes(data)))
-    header = struct.pack("<HHH", 0, 1, len(pngs))
-    offset = 6 + 16 * len(pngs)
-    entries, blobs = b"", b""
-    for size, png in pngs:
-        dim = 0 if size >= 256 else size
-        entries += struct.pack("<BBBBHHII", dim, dim, 0, 0, 1, 32, len(png), offset)
-        blobs += png
-        offset += len(png)
-    path.write_bytes(header + entries + blobs)
+from mywhisper.ui.app_icon import write_ico  # noqa: E402
 
 
 def write_version_info(path: Path) -> None:

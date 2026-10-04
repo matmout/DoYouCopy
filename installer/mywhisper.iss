@@ -57,9 +57,16 @@ fr.DeleteData=Supprimer aussi les modèles téléchargés, l'accélération grap
 en.DeleteData=Also delete the downloaded models, the GPU acceleration and MyWhisper's settings?%n%nChoose No to keep them (faster reinstall).
 fr.LaunchApp=Lancer MyWhisper
 en.LaunchApp=Launch MyWhisper
+fr.StartMenuIcon=Créer un raccourci dans le menu Démarrer
+en.StartMenuIcon=Create a Start menu shortcut
+fr.Shortcuts=Raccourcis (modifiables ensuite dans les réglages de MyWhisper) :
+en.Shortcuts=Shortcuts (can be changed later in MyWhisper's settings):
 
 [Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+; The app's settings can add or remove the same shortcuts later
+; (src/mywhisper/desktop/shortcuts.py writes the very same paths).
+Name: "startmenuicon"; Description: "{cm:StartMenuIcon}"; GroupDescription: "{cm:Shortcuts}"
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:Shortcuts}"; Flags: unchecked
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -67,9 +74,15 @@ Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreve
 
 [Icons]
 ; Same AppUserModelID as the running app (app.py), so a pinned shortcut groups with its window.
-Name: "{group}\MyWhisper"; Filename: "{app}\MyWhisper.exe"; AppUserModelID: "MyWhisper.MyWhisper"
-Name: "{group}\{cm:UninstallProgram,MyWhisper}"; Filename: "{uninstallexe}"
+Name: "{group}\MyWhisper"; Filename: "{app}\MyWhisper.exe"; AppUserModelID: "MyWhisper.MyWhisper"; Tasks: startmenuicon
+Name: "{group}\{cm:UninstallProgram,MyWhisper}"; Filename: "{uninstallexe}"; Tasks: startmenuicon
 Name: "{userdesktop}\MyWhisper"; Filename: "{app}\MyWhisper.exe"; AppUserModelID: "MyWhisper.MyWhisper"; Tasks: desktopicon
+
+[UninstallDelete]
+; Shortcuts created later from the settings are not in the uninstall log.
+Type: files; Name: "{userdesktop}\MyWhisper.lnk"
+Type: files; Name: "{group}\MyWhisper.lnk"
+Type: dirifempty; Name: "{group}"
 
 [Registry]
 ; "Start with Windows" is written by the app itself; only remove it on uninstall.

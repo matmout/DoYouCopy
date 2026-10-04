@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 import sys
-from pathlib import Path
+
+from mywhisper.desktop.shortcuts import launch_target
 
 log = logging.getLogger(__name__)
 
@@ -13,14 +14,9 @@ VALUE_NAME = "MyWhisper"
 
 
 def command() -> str:
-    """MyWhisper.exe --minimized, or pythonw.exe (no console) -m mywhisper from a checkout."""
-    if getattr(sys, "frozen", False):
-        return f'"{sys.executable}" --minimized'
-    python = Path(sys.executable)
-    pythonw = python.with_name("pythonw.exe")
-    if pythonw.exists():
-        python = pythonw
-    return f'"{python}" -m mywhisper --minimized'
+    """MyWhisper.exe --minimized, or pythonw.exe (no console) -m mywhisper from a checkout:
+    the same program as the shortcuts, started in the notification area."""
+    return launch_target().command_line("--minimized")
 
 
 def is_enabled() -> bool:

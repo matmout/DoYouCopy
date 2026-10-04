@@ -24,7 +24,7 @@ Le GPU AMD apparaît sous le device `"cuda"` de CTranslate2 : c'est le nom histo
 
 ## Installation (utilisateurs)
 
-Téléchargez et lancez `MyWhisper-Setup-<version>.exe` (Windows 10 / 11, 64 bits). L'installation se fait dans votre profil, **sans droits administrateur**. À la fin :
+Téléchargez et lancez `MyWhisper-Setup-<version>.exe` (Windows 10 / 11, 64 bits). L'installation se fait dans votre profil, **sans droits administrateur**. L'installeur propose deux raccourcis : **dans le menu Démarrer** (coché par défaut) et **sur le Bureau**. Vous pourrez les ajouter ou les retirer plus tard dans les réglages (Général → Raccourcis). À la fin :
 
 1. l'installeur **détecte la carte graphique** et télécharge l'accélération correspondante depuis les sources officielles, avec des versions et des empreintes SHA-256 figées :
 
@@ -41,7 +41,7 @@ Sans accélération, un bandeau « **Transcription plus lente sur cette machine*
 
 L'installeur n'est pas encore signé : Windows SmartScreen affiche « Windows a protégé votre ordinateur ». Cliquez sur **Informations complémentaires**, puis sur **Exécuter quand même**.
 
-La désinstallation (Paramètres → Applications) supprime l'application et l'accélération graphique. Elle propose aussi de supprimer les modèles et les réglages.
+La désinstallation (Paramètres → Applications) supprime l'application, ses raccourcis (y compris ceux créés depuis les réglages) et l'accélération graphique. Elle propose aussi de supprimer les modèles et les réglages.
 
 ## Installation (développement, depuis les sources)
 
@@ -91,11 +91,13 @@ Le grand bouton micro démarre et arrête la capture dans le mode choisi au-dess
 
 ## Réglages
 
-Chaque changement s'applique tout de suite et est enregistré dans `%APPDATA%\MyWhisper\settings.json`.
+Chaque changement s'applique tout de suite et est enregistré dans `%APPDATA%\MyWhisper\settings.json`. Si ce fichier est abîmé ou modifié à la main avec une valeur invalide, seule cette valeur revient à son défaut (un avertissement est écrit dans le journal).
+
+Les raccourcis et le démarrage avec Windows ne sont pas des réglages : les cases reflètent les fichiers réellement présents (raccourcis `.lnk`, clé `Run` du registre). Depuis les sources, le raccourci lance `pythonw.exe -m mywhisper` avec l'icône de l'application.
 
 | Section | Réglages |
 |---|---|
-| Général | thème, taille du texte, horodatage, micro, zone de notification, démarrage avec Windows, retour aux réglages par défaut (le vocabulaire est conservé) |
+| Général | thème, taille du texte, horodatage, micro, zone de notification, démarrage avec Windows, **raccourcis sur le Bureau et dans le menu Démarrer**, retour aux réglages par défaut (le vocabulaire est conservé) |
 | Transcription | langue parlée, plusieurs langues dans le même audio, **traduction en anglais**, contexte (sujet, noms, style), vocabulaire, qualité de recherche (*beam size*), utilisation du texte précédent, **transcription des fichiers par lots** (3 à 4× plus rapide sur GPU) |
 | Silences | filtre des silences (VAD) avec sa sensibilité et la pause minimale, suppression du texte inventé pendant les longs silences, seuil « pas de parole », pénalité de répétition |
 | Dictée | raccourci, mode Maintenir / Basculer, coller ou copier, espace après le texte, commandes vocales, signal sonore |
@@ -200,7 +202,7 @@ L'accélération est installée dans `%LOCALAPPDATA%\MyWhisper\runtime` (variabl
 
 Chaque transcription (enregistrement, Direct, fichier) est enregistrée automatiquement dans `%LOCALAPPDATA%\MyWhisper\history`, base SQLite avec recherche plein texte (FTS5). Les longues sessions sont sauvegardées toutes les 30 secondes : un plantage ne fait perdre que les dernières secondes. Le panneau **Historique** (Ctrl+H) liste les sessions : la recherche ignore les accents et trouve les débuts de mots, un clic ouvre une transcription, le clic droit permet de la renommer (F2), de l'ajouter aux favoris ou de la supprimer (Suppr).
 
-L'audio des enregistrements micro et Direct est conservé en FLAC (environ 60 Mo par heure), puis supprimé après 30 jours par défaut ; le texte reste. Les fichiers importés ne sont pas copiés : le lecteur rejoue le fichier d'origine tant qu'il existe. Le texte des dictées universelles est conservé aussi (jamais leur audio), sauf si l'option est désactivée dans les réglages.
+L'audio des enregistrements micro et Direct est conservé en FLAC (environ 60 Mo par heure), puis supprimé après 30 jours par défaut ; le texte reste. Supprimer une transcription supprime aussi son audio, même s'il est ouvert dans le lecteur ; au démarrage, les fichiers audio qui ne correspondent plus à aucune transcription (suppression refusée par Windows, plantage pendant l'encodage) sont effacés. Les fichiers importés ne sont pas copiés : le lecteur rejoue le fichier d'origine tant qu'il existe. Le texte des dictées universelles est conservé aussi (jamais leur audio), sauf si l'option est désactivée dans les réglages.
 
 ## Éditeur synchronisé
 
@@ -226,8 +228,9 @@ Ce script affiche la version de CTranslate2, la présence du runtime ROCm et le 
 ```
 src/mywhisper/
   app.py              bootstrap : détection GPU (avant Qt), moteur, fenêtre
-  config.py           réglages JSON (%APPDATA%\MyWhisper\settings.json)
+  config.py           réglages JSON (%APPDATA%\MyWhisper\settings.json), validés valeur par valeur
   session.py          SessionController : capture, transcription, corrections, résultat courant (sans Qt Widgets)
+  history_controller.py  HistoryController : entrée courante, sauvegarde auto, audio et dictées conservés (sans Qt Widgets)
   diagnostics.py      journal, exceptions non rattrapées, rapport de diagnostic
   storage/
     history.py        historique SQLite + FTS5, rétention de l'audio
@@ -251,10 +254,13 @@ src/mywhisper/
     store.py          emplacement et activation (sys.path, DLL) avant l'import de ctranslate2
     startup.py        choix au démarrage, test du GPU (--probe), explication du repli processeur
   download.py         téléchargements HTTP : progression, reprise, annulation, SHA-256
+  desktop/
+    com.py            COM minimal via ctypes (partagé avec loopback.py)
+    shortcuts.py      raccourcis Bureau / menu Démarrer (.lnk avec l'AppUserModelID de l'app)
   options.py          TranscribeOptions construites depuis les réglages (fichier, Direct, dictée)
   dictation/
     controller.py     dictée universelle : machine à états raccourci → micro → texte
-    hotkey.py         raccourci global (hook clavier WH_KEYBOARD_LL)
+    hotkey.py         raccourci global (hook clavier WH_KEYBOARD_LL, réinstallé toutes les 15 s)
     inject.py         collage dans la fenêtre active (SendInput), presse-papiers restauré
     autostart.py      démarrage avec Windows (clé Run de HKCU)
     sounds.py         signaux sonores synthétisés
@@ -262,7 +268,8 @@ src/mywhisper/
     subtitles.py      découpage des sous-titres (2 × 42 caractères)
   ui/
     workers.py        ModelWorker : thread unique propriétaire du modèle
-    main_window.py    fenêtre : composition, affichage de la session, historique, édition
+    main_window.py    fenêtre : composition, affichage de la session et de l'historique, édition
+    app_icon.py       icône de l'application (fenêtre, barre des tâches, .ico de l'exe et des raccourcis)
     history_panel.py  panneau latéral de l'historique
     tray.py           icône de la zone de notification
     settings_dialog.py  fenêtre de réglages complète, par sections
@@ -287,6 +294,9 @@ Principes :
 - **Les segments sont émis un par un** depuis le générateur de faster-whisper. C'est ce qui produit l'affichage progressif et permet d'annuler entre deux segments.
 - **Ajouter un modèle** revient à ajouter une entrée `ModelSpec` dans `core/models.py`. **Ajouter un format d'export** revient à créer une classe avec `suffix`, `label` et `render()`, puis à appeler `register()`.
 
+- **La logique reste hors des widgets.** `SessionController` (capture, transcription) et `HistoryController` (ce qui est enregistré, quand) se testent sans fenêtre ; `MainWindow` affiche et relaie.
+- **Windows retire en silence un hook clavier trop lent.** Le raccourci global est donc réinstallé périodiquement (`KeyboardHook.reinstall`), sans trou : le nouveau hook est posé avant le retrait de l'ancien.
+
 Le mode Direct et la dictée universelle passent eux aussi par `ModelWorker` : le GPU garde un seul utilisateur. La dictée a ses propres signaux (`dictation_finished`), pour que son texte n'apparaisse pas dans la fenêtre principale.
 
 Prochaines évolutions : voir [ROADMAP.md](ROADMAP.md).
@@ -295,6 +305,7 @@ Prochaines évolutions : voir [ROADMAP.md](ROADMAP.md).
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest           # tests unitaires
+.\.venv\Scripts\python.exe -m ruff check .      # analyse statique (règles dans pyproject.toml)
 .\.venv\Scripts\python.exe -m pytest -m gpu    # transcription réelle sur le GPU (synthèse vocale Windows)
 .\.venv\Scripts\python.exe -m pytest -m hardware  # capture réelle de l'audio de l'ordinateur (joue un son)
 ```

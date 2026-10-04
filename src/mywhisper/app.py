@@ -54,18 +54,17 @@ def main() -> int:
 
     from PySide6.QtWidgets import QApplication
 
-    from mywhisper.ui import theme
+    from mywhisper.ui import app_icon
     from mywhisper.ui.main_window import MainWindow
     from mywhisper.ui.workers import ModelWorker
 
     set_app_user_model_id()
     app = QApplication(sys.argv)
     app.setApplicationName("MyWhisper")
-    app.setWindowIcon(theme.icon("ph.microphone-fill", theme.resolve(settings.theme), "accent"))
+    app.setWindowIcon(app_icon.qicon())  # every window, and the taskbar
     setup_style(app, settings.theme)
     worker = ModelWorker(engine)
     window = MainWindow(settings, worker, device.description, history=open_history(settings))
-    window.setWindowIcon(theme.icon("ph.microphone-fill", window.tokens, "accent"))
     window.runtime_variant = choice.variant
     if not device.is_gpu:
         window.set_cpu_notice(startup.cpu_notice(choice))
@@ -85,20 +84,24 @@ def set_app_user_model_id() -> None:
         return
     import ctypes
 
+    from mywhisper.desktop.shortcuts import APP_ID
+
     try:
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("MyWhisper.MyWhisper")
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
     except (AttributeError, OSError):
         log.warning("Could not set the AppUserModelID")
 
 
 def open_history(settings: Settings):
-    """The history store, with its audio retention applied; None if it cannot be opened."""
+    """The history store, with its audio retention applied and leftover audio files
+    removed; None if it cannot be opened (the app then runs without history)."""
     from mywhisper.config import default_history_dir
     from mywhisper.storage.history import HistoryStore
 
     try:
         store = HistoryStore(default_history_dir())
         store.purge_audio(settings.history_audio_days)
+        store.remove_orphan_audio()
     except Exception:
         log.exception("Could not open the history")
         return None
@@ -125,7 +128,7 @@ def run_runtime_setup(settings: Settings) -> int:
     from PySide6.QtWidgets import QApplication
 
     from mywhisper.runtime import gpu_detect
-    from mywhisper.ui import theme
+    from mywhisper.ui import app_icon
     from mywhisper.ui.runtime_dialog import RuntimeSetupDialog
 
     set_app_user_model_id()
@@ -135,7 +138,7 @@ def run_runtime_setup(settings: Settings) -> int:
     detection = gpu_detect.detect()
     log.info("Runtime setup: %s", detection)
     dialog = RuntimeSetupDialog(detection)
-    dialog.setWindowIcon(theme.icon("ph.microphone-fill", theme.resolve(settings.theme), "accent"))
+    app.setWindowIcon(app_icon.qicon())
     dialog.show()
     dialog.exec()
     return 0
