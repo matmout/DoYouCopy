@@ -13,7 +13,9 @@ VALUE_NAME = "MyWhisper"
 
 
 def command() -> str:
-    """pythonw.exe (no console window) -m mywhisper --minimized."""
+    """MyWhisper.exe --minimized, or pythonw.exe (no console) -m mywhisper from a checkout."""
+    if getattr(sys, "frozen", False):
+        return f'"{sys.executable}" --minimized'
     python = Path(sys.executable)
     pythonw = python.with_name("pythonw.exe")
     if pythonw.exists():

@@ -33,6 +33,7 @@ from mywhisper.dictation.hotkey import parse_hotkey
 from mywhisper.export.markdown import MarkdownExporter, timecode
 from mywhisper.ui import theme
 from mywhisper.ui.vocabulary_dialog import VocabularyDialog
+from mywhisper.ui.widgets.notice_bar import NoticeBar
 from mywhisper.ui.widgets.record_button import RecordButton
 from mywhisper.ui.widgets.segmented import SegmentedControl
 from mywhisper.ui.widgets.settings_popover import SettingsPopover
@@ -76,6 +77,7 @@ class MainWindow(QMainWindow):
     hidden_to_tray = Signal()
     hotkey_changed = Signal(str)
     theme_tokens_changed = Signal(object)  # theme.Tokens
+    install_runtime_requested = Signal()
 
     def __init__(self, settings: Settings, worker: ModelWorker, device_description: str) -> None:
         super().__init__()
@@ -96,6 +98,7 @@ class MainWindow(QMainWindow):
         self.dictation = None
         self.hook = None
         self.close_to_tray_available = False
+        self.cpu_notice = None
         self._quitting = False
 
         self.setWindowTitle("MyWhisper")
@@ -184,9 +187,13 @@ class MainWindow(QMainWindow):
         # transcript card
         self.transcript = TranscriptView(t)
         self.transcript.retry_requested.connect(self._retry_model)
-        card_row = QHBoxLayout()
+        self.notice = NoticeBar(t)
+        self.notice.action_clicked.connect(self.install_runtime_requested)
+        card_row = QVBoxLayout()
         card_row.setContentsMargins(24, 8, 24, 16)
-        card_row.addWidget(self.transcript)
+        card_row.setSpacing(10)
+        card_row.addWidget(self.notice)
+        card_row.addWidget(self.transcript, 1)
 
         # bottom bar: actions, status, device
         self.copy_button = QToolButton()
@@ -302,6 +309,7 @@ class MainWindow(QMainWindow):
         w = self.worker
         w.model_loading.connect(self._on_model_loading)
         w.model_loaded.connect(self._on_model_loaded)
+        w.model_downloading.connect(self._on_model_downloading)
         w.transcription_started.connect(self._on_started)
         w.segment_ready.connect(self._on_segment)
         w.transcription_finished.connect(self._on_finished)
@@ -371,7 +379,7 @@ class MainWindow(QMainWindow):
         self.tokens = theme.resolve(self.settings.theme)
         theme.apply(QApplication.instance(), self.tokens)
         theme.apply_titlebar(self, self.tokens)
-        for widget in (self.record_button, self.waveform, self.transcript):
+        for widget in (self.record_button, self.waveform, self.transcript, self.notice):
             widget.set_tokens(self.tokens)
         self._apply_icons()
         self._rerender()
@@ -468,7 +476,9 @@ class MainWindow(QMainWindow):
         self.source_name = "direct"
         self._update_controls()
         message = "Parlez, le texte s'affiche au fil de l'eau."
-        if self.model_control.value() != "turbo":
+        if self.cpu_notice is not None:
+            message = "Sur le processeur, le texte arrive avec plusieurs secondes de retard."
+        elif self.model_control.value() != "turbo":
             message = "Modèle précis : latence plus élevée en direct."
         self._status(message)
         self.worker.start_live(self.recorder, self.transcribe_options())
@@ -572,9 +582,18 @@ class MainWindow(QMainWindow):
         self._status("Chargement du modèle…")
         self._update_controls()
 
+    def _on_model_downloading(self, model_name: str, done: int, total: int) -> None:
+        size = f"{done / 1024**3:.1f} / {total / 1024**3:.1f} Go".replace(".", ",")
+        if not self.segments and not self.busy:
+            self.transcript.show_loading_text(f"Premier lancement : téléchargement de {model_name}… {size}")
+            self.transcript.set_progress(done / total if total else None)
+        self._status(f"Téléchargement du modèle · {done * 100 // max(total, 1)} %")
+
     def _on_model_loaded(self, key: str, device_description: str) -> None:
         self.model_loading = False
         self.model_ready = True
+        if not self.busy:
+            self.transcript.set_progress(None)
         self.device_chip.setText(device_description)
         if not self.segments and not self.busy:
             self.transcript.show_empty()
@@ -624,6 +643,17 @@ class MainWindow(QMainWindow):
             return
         speed = f" · {duration / elapsed:.0f}× temps réel" if elapsed and duration else ""
         self._status(f"{clock(duration)} transcrit en {elapsed:.1f} s{speed}")
+
+    # ---- CPU fallback ----------------------------------------------------
+
+    def set_cpu_notice(self, notice) -> None:
+        """notice: runtime.startup.CpuNotice, or None when the GPU is used."""
+        self.cpu_notice = notice
+        if notice is None:
+            self.notice.hide()
+            return
+        action = "Installer l'accélération" if notice.install_variant else None
+        self.notice.show_notice(notice.title, notice.detail, action)
 
     def _on_error(self, message: str) -> None:
         failed_load = self.model_loading

@@ -28,6 +28,7 @@ class ModelWorker(QObject):
     request_dictate = Signal(object, object, int)  # audio, TranscribeOptions, job id
 
     model_loading = Signal(str)  # model label
+    model_downloading = Signal(str, int, int)  # model name, done bytes, total bytes
     model_loaded = Signal(str, str)  # model key, device description
     transcription_started = Signal(object)  # TranscriptionInfo
     segment_ready = Signal(object)  # Segment
@@ -51,6 +52,9 @@ class ModelWorker(QObject):
         self._live_factory = live_factory
         self._cancel = threading.Event()
         self._live_stop = threading.Event()
+        self._last_download_emit = 0.0
+        if hasattr(engine, "on_download_progress"):
+            engine.on_download_progress = self._download_progress
         self._thread = QThread()
         self._thread.setObjectName("model-worker")
         self.moveToThread(self._thread)
@@ -88,6 +92,13 @@ class ModelWorker(QObject):
         self.stop_live()
         self._thread.quit()
         self._thread.wait()
+
+    def _download_progress(self, spec, done: int, total: int) -> None:
+        now = time.monotonic()
+        if done < total and now - self._last_download_emit < 0.15:
+            return  # a few updates per second are plenty for a progress bar
+        self._last_download_emit = now
+        self.model_downloading.emit(spec.model_name, done, total)
 
     @Slot(str)
     def _load(self, key: str) -> None:

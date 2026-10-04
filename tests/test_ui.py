@@ -289,3 +289,55 @@ def test_invalid_hotkey_is_reverted(app, make_window):
     assert window.settings.dictation_hotkey == "Ctrl+Shift+Space"
     window._hotkey_edited("Ctrl+Alt+D")
     assert window.settings.dictation_hotkey == "Ctrl+Alt+D"
+
+
+def test_cpu_notice_banner_and_install_action(app, make_window):
+    from mywhisper.runtime.startup import CpuNotice
+
+    window = make_window(FakeEngine())
+    requested = []
+    window.install_runtime_requested.connect(lambda: requested.append(True))
+    window.set_cpu_notice(CpuNotice("Transcription plus lente sur cette machine", "Carte NVIDIA détectée", "nvidia"))
+    assert window.notice.isVisibleTo(window) and window.notice.action.isVisibleTo(window)
+    window.notice.action.click()
+    assert requested
+    window.set_cpu_notice(CpuNotice("Transcription plus lente sur cette machine", "Intel UHD"))
+    assert not window.notice.action.isVisibleTo(window)
+    window.set_cpu_notice(None)
+    assert not window.notice.isVisibleTo(window)
+
+
+def test_model_download_progress_is_shown(app, make_window):
+    window = make_window(FakeEngine())
+    window._on_model_downloading("large-v3-turbo", 800 * 1024**2, 1600 * 1024**2)
+    assert "téléchargement de large-v3-turbo" in window.transcript.skeleton.label.text()
+    assert window.transcript.progress.isVisibleTo(window)
+    assert "50 %" in window.status_text()
+
+
+def test_runtime_dialog_install_flow(app, monkeypatch):
+    from mywhisper.runtime import install
+    from mywhisper.runtime.gpu_detect import Adapter, Detection
+    from mywhisper.ui import runtime_dialog
+
+    monkeypatch.setattr(runtime_dialog.store, "is_installed", lambda package: False)
+    removed = []
+    monkeypatch.setattr(runtime_dialog.store, "remove", lambda package: removed.append(package))
+
+    def fake_install(package, progress=None, cancel=None):
+        progress("download", 1, 2)
+        progress("extract", 2, 2)
+
+    monkeypatch.setattr(install, "install", fake_install)
+    detection = Detection("nvidia", Adapter("NVIDIA GeForce RTX 4070", "nvidia"), "Carte NVIDIA détectée : RTX 4070")
+
+    ok = runtime_dialog.RuntimeSetupDialog(detection, probe=lambda: {"ok": True})
+    wait_until(app, lambda: ok._thread is None and ok.cancel_button.text() == "Terminer")
+    assert ok.gpu_ready and "activée" in ok.title.text()
+
+    bad = runtime_dialog.RuntimeSetupDialog(detection, probe=lambda: {"ok": False})
+    wait_until(app, lambda: bad._thread is None and bad.cancel_button.text() == "Terminer")
+    assert not bad.gpu_ready and "pilote NVIDIA" in bad.detail.text() and removed
+
+    cpu = runtime_dialog.RuntimeSetupDialog(Detection("cpu", None, "Aucune carte graphique compatible détectée"))
+    assert cpu.package is None and "processeur" in cpu.detail.text()

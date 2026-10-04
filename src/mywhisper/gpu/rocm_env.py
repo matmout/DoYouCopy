@@ -1,7 +1,8 @@
-"""Picks the inference device: AMD GPU through the ROCm build of CTranslate2, else CPU.
+"""Picks the inference device: the GPU seen by CTranslate2 (NVIDIA CUDA or AMD ROCm), else CPU.
 
-Import this module before PySide6 so the ROCm DLL directories registered by
-ctranslate2 are in place before Qt loads its own libraries.
+Import this module before PySide6 so the DLL directories registered by
+ctranslate2 are in place before Qt loads its own libraries. In the packaged app,
+mywhisper.runtime.startup.prepare() must run first: it picks which ctranslate2 is imported.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ from mywhisper.core.types import DeviceConfig
 
 log = logging.getLogger(__name__)
 
-CPU = DeviceConfig("cpu", "int8", "CPU · int8")
+CPU = DeviceConfig("cpu", "int8", "Processeur · int8")
 
 
 def gpu_device() -> DeviceConfig | None:
@@ -23,10 +24,10 @@ def gpu_device() -> DeviceConfig | None:
             return None
         supported = ctranslate2.get_supported_compute_types("cuda")
     except Exception:
-        log.exception("ROCm/HIP initialisation failed")
+        log.exception("GPU initialisation failed")
         return None
     compute_type = "float16" if "float16" in supported else "float32"
-    return DeviceConfig("cuda", compute_type, f"GPU ROCm · {compute_type}")
+    return DeviceConfig("cuda", compute_type, f"GPU · {compute_type}")
 
 
 def detect_device(preference: str = "auto") -> DeviceConfig:
@@ -35,6 +36,6 @@ def detect_device(preference: str = "auto") -> DeviceConfig:
         return CPU
     gpu = gpu_device()
     if gpu is None:
-        log.warning("No ROCm GPU found, falling back to CPU")
+        log.warning("No GPU found, falling back to CPU")
         return CPU
     return gpu

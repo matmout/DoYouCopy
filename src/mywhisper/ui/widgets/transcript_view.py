@@ -247,7 +247,10 @@ class TranscriptView(QFrame):
         self.pages.setCurrentWidget(self.empty)
 
     def show_loading(self, label: str) -> None:
-        self.skeleton.label.setText(f"Chargement de {label}…")
+        self.show_loading_text(f"Chargement de {label}…")
+
+    def show_loading_text(self, text: str) -> None:
+        self.skeleton.label.setText(text)
         self.pages.setCurrentWidget(self.skeleton)
 
     def show_error(self, message: str, action: str | None = None) -> None:

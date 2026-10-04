@@ -22,7 +22,7 @@ from mywhisper.ui.main_window import MainWindow  # noqa: E402
 from mywhisper.ui.widgets.transcript_view import LISTENING_RECORD  # noqa: E402
 from mywhisper.ui.workers import ModelWorker  # noqa: E402
 
-GPU = DeviceConfig("cuda", "float16", "GPU ROCm · float16")
+GPU = DeviceConfig("cuda", "float16", "GPU · float16")
 
 SENTENCES = [
     (0.0, 4.2, "Bonjour à tous, voici une dictée de démonstration."),
