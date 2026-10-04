@@ -15,6 +15,7 @@ import numpy as np
 from PySide6.QtCore import QObject, Signal
 
 from mywhisper.audio.recorder import MicRecorder
+from mywhisper.audio.sources import MIC, make_recorder
 from mywhisper.config import Settings
 from mywhisper.core.live import LiveUpdate, merge_sentences
 from mywhisper.core.textproc import apply_replacements
@@ -76,11 +77,14 @@ class SessionController(QObject):
     model_downloading = Signal(str, int, int)  # model name, done bytes, total bytes
     model_loaded = Signal(str, str)  # model key, device description
 
-    def __init__(self, settings: Settings, worker, recorder: MicRecorder | None = None) -> None:
+    def __init__(self, settings: Settings, worker, recorder=None, recorder_factory=make_recorder) -> None:
         super().__init__()
         self.settings = settings
         self.worker = worker
-        self.recorder = recorder or MicRecorder(settings.input_device)
+        # A given recorder is kept; otherwise one is made for settings.audio_source at each capture.
+        self._recorder = recorder or MicRecorder(settings.input_device)
+        self._factory = None if recorder is not None else recorder_factory
+        self._recorder_source = MIC
         self.segments: list[Segment] = []
         self.source_name = "transcription"
         self.busy = False  # file / recording transcription in progress
@@ -112,6 +116,15 @@ class SessionController(QObject):
         w.retranscribe_failed.connect(self._on_retranscribe_failed)
 
     # ---- state ---------------------------------------------------------
+
+    @property
+    def recorder(self):
+        return self._recorder
+
+    @recorder.setter
+    def recorder(self, recorder) -> None:
+        self._recorder = recorder
+        self._factory = None
 
     @property
     def idle(self) -> bool:
@@ -147,13 +160,20 @@ class SessionController(QObject):
 
     # ---- capture -------------------------------------------------------
 
-    def _open_microphone(self) -> bool:
-        self.recorder.device_name = self.settings.input_device
+    def _open_input(self) -> bool:
+        source = self.settings.audio_source
+        if self._factory is not None and source != self._recorder_source:
+            self._recorder = self._factory(source, self.settings.input_device)
+            self._recorder_source = source
+        self._recorder.device_name = self.settings.input_device
         try:
-            self.recorder.start()
+            self._recorder.start()
         except Exception as exc:
-            log.exception("Microphone start failed")
-            self.error.emit(f"Impossible d'ouvrir le micro : {exc}", False)
+            log.exception("Audio capture start failed")
+            if source == MIC or self._factory is None:
+                self.error.emit(f"Impossible d'ouvrir le micro : {exc}", False)
+            else:
+                self.error.emit(f"Impossible de démarrer la capture : {exc}", False)
             return False
         return True
 
@@ -164,7 +184,7 @@ class SessionController(QObject):
             self.start_recording()
 
     def start_recording(self) -> bool:
-        if not self.available or not self._open_microphone():
+        if not self.available or not self._open_input():
             return False
         self.capture_started.emit(RECORD)
         self.status.emit("Enregistrement…", 0)
@@ -184,7 +204,7 @@ class SessionController(QObject):
         self._transcribe(audio, RECORD, "dictee", samples=audio if self.keeps_audio else None)
 
     def start_live(self) -> bool:
-        if not self.available or not self._open_microphone():
+        if not self.available or not self._open_input():
             return False
         self.live = True
         self.live_stopping = False

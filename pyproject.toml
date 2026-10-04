@@ -40,5 +40,8 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["gpu: needs the ROCm GPU and downloads a Whisper model"]
-addopts = "-m 'not gpu'"
+markers = [
+    "gpu: needs the ROCm GPU and downloads a Whisper model",
+    "hardware: plays a sound and captures it (Windows audio devices)",
+]
+addopts = "-m 'not gpu and not hardware'"

@@ -39,6 +39,7 @@ class Settings:
     mode: str = "record"  # last capture mode: "record" or "live"
     theme: str = "dark"  # "auto" (follow Windows), "dark" or "light"
     input_device: str | None = None  # device name; indices change between sessions
+    audio_source: str = "mic"  # main window captures: "mic", "system" (computer audio) or "both"
     device: str = "auto"  # "auto", "gpu" or "cpu"
     compute_type: str = "auto"  # "auto" or a CTranslate2 type (float16, int8_float16, int8…)
     cpu_threads: int = 0  # 0 = one per physical core

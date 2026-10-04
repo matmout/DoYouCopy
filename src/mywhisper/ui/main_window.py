@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 
 from mywhisper import diagnostics, export
 from mywhisper.audio.recorder import list_input_devices
+from mywhisper.audio.sources import MIC, SOURCES
 from mywhisper.config import Settings
 from mywhisper.core.models import MODELS
 from mywhisper.core.types import Segment
@@ -33,7 +34,7 @@ from mywhisper.runtime import startup
 from mywhisper.session import LIVE_KIND, RECORD, SessionController, SessionResult, clock
 from mywhisper.storage.history import HistoryStore
 from mywhisper.ui import theme
-from mywhisper.ui.history_panel import HistoryPanel
+from mywhisper.ui.history_panel import PANEL_WIDTH, HistoryPanel
 from mywhisper.ui.settings_dialog import SettingsDialog
 from mywhisper.ui.vocabulary_dialog import VocabularyDialog
 from mywhisper.ui.widgets.notice_bar import NoticeBar
@@ -74,6 +75,7 @@ ENGINE_SETTINGS = {"device", "compute_type", "cpu_threads", "models_dir", "allow
 AUDIO_FILTER = "Audio / vidéo (*.wav *.mp3 *.m4a *.flac *.ogg *.opus *.aac *.wma *.mp4 *.mkv *.webm);;Tous (*)"
 AUDIO_SUFFIXES = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".aac", ".wma", ".mp4", ".mkv", ".webm"}
 LEVEL_INTERVAL_MS = 33
+MIN_WIDTH = 720  # of the main column; the history panel adds its own width
 AUTOSAVE_MS = 30_000  # long sessions are saved as they go: a crash loses 30 s at most
 CAPTURE_TITLES = {"record": "Enregistrement", "live": "Direct"}
 
@@ -114,7 +116,7 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("MyWhisper")
         self.resize(900, 760)
-        self.setMinimumSize(720, 600)
+        self.setMinimumSize(MIN_WIDTH, 600)
         self.setAcceptDrops(True)
         self._build_ui(device_description)
         self._connect_session()
@@ -171,6 +173,13 @@ class MainWindow(QMainWindow):
         # capture area: mode, record button, waveform + timer, import
         self.mode_control = SegmentedControl(MODES)
         self.mode_control.set_value(self.settings.mode)
+        self.source_control = SegmentedControl(SOURCES)
+        self.source_control.set_value(self.settings.audio_source)
+        self.source_control.setToolTip(
+            "Ce que MyWhisper écoute : votre micro, le son de l'ordinateur (réunion, vidéo), ou les deux."
+        )
+        self.source_control.changed.connect(self._source_changed)
+        self._consent_shown = False
         self.record_button = RecordButton(t)
         self.record_button.clicked.connect(self._toggle_capture)
         self.waveform = WaveformView(t)
@@ -200,7 +209,13 @@ class MainWindow(QMainWindow):
         capture = QVBoxLayout()
         capture.setContentsMargins(24, 22, 24, 10)
         capture.setSpacing(6)
-        capture.addWidget(self.mode_control, alignment=Qt.AlignmentFlag.AlignHCenter)
+        controls_row = QHBoxLayout()
+        controls_row.setSpacing(12)
+        controls_row.addStretch()
+        controls_row.addWidget(self.mode_control)
+        controls_row.addWidget(self.source_control)
+        controls_row.addStretch()
+        capture.addLayout(controls_row)
         capture.addWidget(self.record_button, alignment=Qt.AlignmentFlag.AlignHCenter)
         capture.addLayout(wave_row)
         capture.addSpacing(4)
@@ -295,6 +310,7 @@ class MainWindow(QMainWindow):
             panel.deleted.connect(self._history_entry_deleted)
             panel.renamed.connect(self._history_entry_renamed)
             panel.setVisible(self.settings.history_visible)
+            self.setMinimumWidth(MIN_WIDTH + (PANEL_WIDTH if self.settings.history_visible else 0))
             self.history_button.setChecked(self.settings.history_visible)
             self.history_button.toggled.connect(self._toggle_history)
             body.addWidget(panel)
@@ -574,9 +590,21 @@ class MainWindow(QMainWindow):
         elif self.mode_control.value() == "live":
             self._start_live()
         else:
+            self._consent_reminder()
             session.start_recording()
 
+    def _source_changed(self, source: str) -> None:
+        self._set_setting("audio_source", source)
+        self._consent_reminder()
+
+    def _consent_reminder(self) -> None:
+        """Once per run, before a meeting gets recorded."""
+        if self.settings.audio_source != MIC and not self._consent_shown:
+            self._consent_shown = True
+            self.toast.show_message("Prévenez les participants avant d'enregistrer une réunion.")
+
     def _start_live(self) -> None:
+        self._consent_reminder()
         if not self.session.start_live():
             return
         message = "Parlez, le texte s'affiche au fil de l'eau."
@@ -837,6 +865,7 @@ class MainWindow(QMainWindow):
         if self.history_panel is None:
             return
         self.history_panel.setVisible(visible)
+        self.setMinimumWidth(MIN_WIDTH + (PANEL_WIDTH if visible else 0))
         if visible:
             self.history_panel.search.setFocus()
         self._set_setting("history_visible", visible)
@@ -979,6 +1008,7 @@ class MainWindow(QMainWindow):
         else:
             self.record_button.setEnabled(not s.model_loading_now and s.idle)
         self.mode_control.setEnabled(s.available)
+        self.source_control.setEnabled(s.available)
         self.model_control.setEnabled(s.available)
         self.language_combo.setEnabled(not capturing)
         self.import_button.setEnabled(s.available)

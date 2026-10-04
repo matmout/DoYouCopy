@@ -452,3 +452,19 @@ def test_history_toggle_and_busy_session(app, history_window):
     assert window.history_id != entry_id
     engine.release.set()
     wait_until(app, lambda: window.session.idle)
+
+
+def test_audio_source_setting_and_consent_reminder(app, make_window):
+    window = make_window(FakeEngine())
+    shown = []
+    window.toast.show_message = shown.append
+    window._source_changed("both")
+    assert window.settings.audio_source == "both"
+    assert shown and "participants" in shown[0]
+    window._source_changed("system")
+    assert len(shown) == 1  # once per run
+    window.session.recorder = FakeRecorder()
+    wait_until(app, lambda: window.session.model_ready)
+    window._start_live()
+    assert not window.source_control.isEnabled()
+    window.session.stop_live()
