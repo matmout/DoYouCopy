@@ -93,5 +93,38 @@ def download(
     return target
 
 
+def hf_cache_dir(models_dir: Path, model_name: str) -> Path:
+    """Where scripts/download_models.py (huggingface_hub) put the model."""
+    return models_dir / ("models--" + repo_id(model_name).replace("/", "--"))
+
+
+def installed_size(models_dir: Path, model_name: str) -> int:
+    """Bytes on disk for this model in either layout, 0 when absent."""
+    total = 0
+    plain = local_dir(models_dir, model_name)
+    if is_complete(plain):
+        total += sum(f.stat().st_size for f in plain.rglob("*") if f.is_file())
+    for snapshot in _snapshots(models_dir, model_name):
+        # files are symlinks to content-addressed blobs: stat() follows them
+        total += sum(f.stat().st_size for f in snapshot.iterdir() if f.is_file())
+    return total
+
+
+def _snapshots(models_dir: Path, model_name: str) -> list[Path]:
+    cache = hf_cache_dir(models_dir, model_name)
+    return [m.parent for m in cache.glob("snapshots/*/model.bin") if m.exists()]
+
+
 def discard(models_dir: Path, model_name: str) -> None:
+    """Deletes the model in both layouts, including the shared blobs it points to."""
     shutil.rmtree(local_dir(models_dir, model_name), ignore_errors=True)
+    cache = hf_cache_dir(models_dir, model_name)
+    root = models_dir.resolve()
+    for link in [*cache.glob("snapshots/*/*"), *cache.glob("blobs/*")]:
+        if not link.is_symlink():
+            continue
+        target = link.resolve()
+        if target != link and root in target.parents:
+            target.unlink(missing_ok=True)
+            target.with_name(target.name + ".refs").unlink(missing_ok=True)
+    shutil.rmtree(cache, ignore_errors=True)

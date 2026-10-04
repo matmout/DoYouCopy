@@ -26,6 +26,7 @@ class ModelWorker(QObject):
     request_transcribe = Signal(object, object)  # AudioSource, TranscribeOptions
     request_live = Signal(object, object)  # source with drain(), TranscribeOptions
     request_dictate = Signal(object, object, int)  # audio, TranscribeOptions, job id
+    request_reconfigure = Signal(object, str)  # engine.configure() kwargs, model key to reload
 
     model_loading = Signal(str)  # model label
     model_downloading = Signal(str, int, int)  # model name, done bytes, total bytes
@@ -62,6 +63,8 @@ class ModelWorker(QObject):
         self.request_transcribe.connect(self._transcribe)
         self.request_live.connect(self._live)
         self.request_dictate.connect(self._dictate)
+        self.request_reconfigure.connect(self._reconfigure)
+        self.live_config = None  # LiveConfig for the next live session (None: defaults)
         self._thread.start()
 
     def transcribe(self, audio, options: TranscribeOptions) -> None:
@@ -99,6 +102,20 @@ class ModelWorker(QObject):
             return  # a few updates per second are plenty for a progress bar
         self._last_download_emit = now
         self.model_downloading.emit(spec.model_name, done, total)
+
+    def reconfigure(self, key: str, **engine_kwargs) -> None:
+        """Device, threads or models folder changed: applied between two jobs, then reload."""
+        self.request_reconfigure.emit(engine_kwargs, key)
+
+    @Slot(object, str)
+    def _reconfigure(self, engine_kwargs: dict, key: str) -> None:
+        try:
+            self._engine.configure(**engine_kwargs)
+        except Exception as exc:
+            log.exception("Engine reconfiguration failed")
+            self.error.emit(f"Impossible d'appliquer les réglages : {exc}")
+            return
+        self._load(key)
 
     @Slot(str)
     def _load(self, key: str) -> None:
@@ -139,7 +156,8 @@ class ModelWorker(QObject):
     def _live(self, source, options: TranscribeOptions) -> None:
         # A loop inside the worker thread: the engine keeps a single owner.
         try:
-            live = self._live_factory(self._engine, options)
+            extra = {"config": self.live_config} if self.live_config is not None else {}
+            live = self._live_factory(self._engine, options, **extra)
             while not self._live_stop.is_set():
                 live.feed(source.drain())
                 if not live.ready():

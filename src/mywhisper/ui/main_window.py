@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import replace
+from dataclasses import fields, replace
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
@@ -27,11 +27,14 @@ from mywhisper.config import Settings
 from mywhisper.core.live import LiveUpdate, merge_sentences
 from mywhisper.core.models import MODELS
 from mywhisper.core.textproc import apply_replacements
-from mywhisper.core.types import SAMPLE_RATE, AudioSource, Segment, TranscribeOptions
-from mywhisper.dictation import autostart
+from mywhisper.core.types import SAMPLE_RATE, AudioSource, Segment
 from mywhisper.dictation.hotkey import parse_hotkey
 from mywhisper.export.markdown import MarkdownExporter, timecode
+from mywhisper.gpu import rocm_env
+from mywhisper.options import FILE, LIVE, live_config, transcribe_options
+from mywhisper.runtime import startup
 from mywhisper.ui import theme
+from mywhisper.ui.settings_dialog import SettingsDialog
 from mywhisper.ui.vocabulary_dialog import VocabularyDialog
 from mywhisper.ui.widgets.notice_bar import NoticeBar
 from mywhisper.ui.widgets.record_button import RecordButton
@@ -65,7 +68,8 @@ LANGUAGES = [
     ("ja", "Japonais"),
 ]
 MODES = [("record", "Enregistrement"), ("live", "Direct")]
-MODEL_LABELS = {"turbo": "Turbo", "precise": "Précis"}
+MODEL_LABELS = {"light": "Léger", "turbo": "Turbo", "precise": "Précis"}
+ENGINE_SETTINGS = {"device", "compute_type", "cpu_threads", "models_dir", "allow_download"}
 
 AUDIO_FILTER = "Audio / vidéo (*.wav *.mp3 *.m4a *.flac *.ogg *.opus *.aac *.wma *.mp4 *.mkv *.webm);;Tous (*)"
 AUDIO_SUFFIXES = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".aac", ".wma", ".mp4", ".mkv", ".webm"}
@@ -99,6 +103,8 @@ class MainWindow(QMainWindow):
         self.hook = None
         self.close_to_tray_available = False
         self.cpu_notice = None
+        self.runtime_variant: str | None = None  # GPU runtime put on the path at startup (app.py)
+        self.settings_dialog: SettingsDialog | None = None
         self._quitting = False
 
         self.setWindowTitle("MyWhisper")
@@ -124,7 +130,9 @@ class MainWindow(QMainWindow):
         wordmark.setObjectName("Wordmark")
         self.model_control = SegmentedControl([(k, MODEL_LABELS.get(k, s.label)) for k, s in MODELS.items()])
         self.model_control.set_value(self.settings.model_key)
-        self.model_control.setToolTip("Turbo : rapide.  Précis : large-v3, plus lent.")
+        self.model_control.setToolTip(
+            "Léger : small, pour le processeur.  Turbo : rapide et précis.  Précis : large-v3, plus lent."
+        )
         self.model_control.changed.connect(self._model_changed)
         self.language_combo = QComboBox()
         for code, name in LANGUAGES:
@@ -263,28 +271,13 @@ class MainWindow(QMainWindow):
             log.exception("Could not list input devices")
         self.settings_popover = SettingsPopover(self, microphones)
         pop = self.settings_popover
-        pop.vad_check.setChecked(self.settings.vad_filter)
-        pop.timestamps_check.setChecked(self.settings.show_timestamps)
-        pop.mic_combo.setCurrentIndex(max(0, pop.mic_combo.findData(self.settings.input_device)))
-        pop.theme_control.set_value(self.settings.theme)
+        self._microphones = microphones
+        self._sync_popover()
         pop.theme_changed.connect(self._theme_setting_changed)
         pop.timestamps_changed.connect(lambda _: self._rerender())
         pop.vocabulary_requested.connect(self._open_vocabulary)
-        pop.hotkey_edit.setKeySequence(QKeySequence.fromString(self.settings.dictation_hotkey))
-        pop.dictation_mode_control.set_value(self.settings.dictation_mode)
-        pop.output_combo.setCurrentIndex(max(0, pop.output_combo.findData(self.settings.dictation_output)))
-        pop.sounds_check.setChecked(self.settings.dictation_sounds)
-        pop.tray_check.setChecked(self.settings.close_to_tray)
-        pop.autostart_check.setChecked(autostart.is_enabled())
-        pop.hotkey_edited.connect(self._hotkey_edited)
-        pop.dictation_mode_control.changed.connect(lambda v: self._set_setting("dictation_mode", v))
-        pop.output_combo.currentIndexChanged.connect(
-            lambda _: self._set_setting("dictation_output", pop.output_combo.currentData())
-        )
-        pop.sounds_check.toggled.connect(lambda v: self._set_setting("dictation_sounds", v))
-        pop.tray_check.toggled.connect(lambda v: self._set_setting("close_to_tray", v))
-        pop.autostart_check.toggled.connect(self._autostart_toggled)
-        pop.visibility_changed.connect(self._settings_visibility_changed)
+        pop.all_settings_requested.connect(lambda: self.open_settings_dialog())
+        self.transcript.set_font_size(self.settings.transcript_font_size)
         # Settings are the single source of truth, kept current for the universal dictation.
         self.mode_control.changed.connect(lambda v: self._set_setting("mode", v))
         self.language_combo.currentIndexChanged.connect(
@@ -301,7 +294,7 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+R"), self, lambda: self._shortcut_capture("record"))
         QShortcut(QKeySequence("Ctrl+L"), self, lambda: self._shortcut_capture("live"))
         QShortcut(QKeySequence.StandardKey.Open, self, self._open_file)
-        QShortcut(QKeySequence.StandardKey.Save, self, lambda: self._export(".txt"))
+        QShortcut(QKeySequence.StandardKey.Save, self, lambda: self._export(self.settings.default_export))
         self.addAction(QAction(self, shortcut=QKeySequence.StandardKey.Quit, triggered=self.close))
         self._update_controls()
 
@@ -347,22 +340,121 @@ class MainWindow(QMainWindow):
         try:
             hotkey = parse_hotkey(text)
         except ValueError as exc:
-            self.settings_popover.hotkey_edit.setKeySequence(QKeySequence.fromString(self.settings.dictation_hotkey))
             self.toast.show_message(str(exc))
             return
         self._set_setting("dictation_hotkey", hotkey.text)
+        self._apply_hotkey()
+
+    def _apply_hotkey(self) -> None:
+        try:
+            hotkey = parse_hotkey(self.settings.dictation_hotkey)
+        except ValueError:
+            return
         if self.hook is not None:
             self.hook.set_hotkey(hotkey)
         self.hotkey_changed.emit(hotkey.text)
 
-    def _settings_visibility_changed(self, visible: bool) -> None:
-        # Typing a new shortcut must not trigger the current one.
-        if self.hook is not None:
-            self.hook.suspend() if visible else self.hook.resume()
+    # ---- settings window ------------------------------------------------
 
-    def _autostart_toggled(self, enabled: bool) -> None:
-        if not autostart.set_enabled(enabled):
-            self.toast.show_message("Impossible de modifier le démarrage automatique")
+    def open_settings_dialog(self, page: str | None = None) -> SettingsDialog:
+        dialog = SettingsDialog(
+            self.settings,
+            self,
+            microphones=self._microphones,
+            device_description=self.device_chip.text(),
+            hardware_status=self._hardware_status,
+            hook=self.hook,
+        )
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.changed.connect(self._on_setting_changed)
+        dialog.vocabulary_requested.connect(self._open_vocabulary)
+        dialog.install_runtime_requested.connect(self.install_runtime_requested)
+        dialog.reset_requested.connect(self.reset_settings)
+        self.worker.model_loaded.connect(dialog.set_device_description_from_load)
+        if page:
+            dialog.show_page(page)
+        self.settings_dialog = dialog
+        dialog.open()
+        return dialog
+
+    def _hardware_status(self) -> tuple[str, bool]:
+        notice = self.cpu_notice
+        if notice is None:
+            if self.settings.device == "cpu":
+                return "Calcul sur le processeur, choisi dans ces réglages.", False
+            return "Accélération graphique active.", False
+        return notice.detail, notice.install_variant is not None
+
+    def _on_setting_changed(self, name: str) -> None:
+        self.save_settings()
+        value = getattr(self.settings, name)
+        if name == "theme":
+            self._theme_changed()
+        elif name in ("show_timestamps", "replacements"):
+            self._rerender()
+        elif name == "transcript_font_size":
+            self.transcript.set_font_size(value)
+        elif name == "language":
+            self.language_combo.blockSignals(True)
+            self.language_combo.setCurrentIndex(max(0, self.language_combo.findData(value)))
+            self.language_combo.blockSignals(False)
+        elif name == "model_key":
+            self.model_control.set_value(value)
+            self._model_changed(value)
+        elif name in ENGINE_SETTINGS:
+            self._apply_engine_settings()
+        elif name == "dictation_hotkey":
+            self._apply_hotkey()
+        self._sync_popover()
+
+    def _apply_engine_settings(self) -> None:
+        """Device, precision, threads or models folder changed: reload the model."""
+        device = rocm_env.detect_device(self.settings.device, self.settings.compute_type)
+        self.model_ready = False
+        self.worker.reconfigure(
+            self.settings.model_key,
+            device=device,
+            cpu_threads=self.settings.cpu_threads,
+            models_dir=Path(self.settings.models_dir),
+            allow_download=self.settings.allow_download,
+        )
+        if device.is_gpu or self.settings.device == "cpu":
+            self.set_cpu_notice(None)
+        elif self.cpu_notice is None:
+            self.set_cpu_notice(startup.cpu_notice(startup.RuntimeChoice(self.runtime_variant)))
+        self._status(f"Rechargement du modèle · {device.description}")
+
+    def reset_settings(self) -> None:
+        """Back to the defaults, keeping the vocabulary, the models folder and the microphone."""
+        kept = {
+            name: getattr(self.settings, name)
+            for name in ("hotwords", "replacements", "models_dir", "input_device", "mode")
+        }
+        defaults = Settings(**kept)
+        before = {f.name: getattr(self.settings, f.name) for f in fields(Settings)}
+        for f in fields(Settings):
+            setattr(self.settings, f.name, getattr(defaults, f.name))
+        changed = [name for name, value in before.items() if getattr(self.settings, name) != value]
+        engine_done = False
+        for name in changed:
+            if name in ENGINE_SETTINGS:
+                if engine_done:
+                    continue
+                engine_done = True
+            self._on_setting_changed(name)
+        self.save_settings()
+        self.toast.show_message("Réglages par défaut rétablis")
+
+    def _sync_popover(self) -> None:
+        pop = self.settings_popover
+        for widget in (pop.vad_check, pop.timestamps_check, pop.mic_combo):
+            widget.blockSignals(True)
+        pop.vad_check.setChecked(self.settings.vad_filter)
+        pop.timestamps_check.setChecked(self.settings.show_timestamps)
+        pop.mic_combo.setCurrentIndex(max(0, pop.mic_combo.findData(self.settings.input_device)))
+        pop.theme_control.set_value(self.settings.theme)
+        for widget in (pop.vad_check, pop.timestamps_check, pop.mic_combo):
+            widget.blockSignals(False)
 
     def _open_vocabulary(self) -> None:
         dialog = VocabularyDialog(self.settings, self)
@@ -481,7 +573,8 @@ class MainWindow(QMainWindow):
         elif self.model_control.value() != "turbo":
             message = "Modèle précis : latence plus élevée en direct."
         self._status(message)
-        self.worker.start_live(self.recorder, self.transcribe_options())
+        self.worker.live_config = live_config(self.settings)
+        self.worker.start_live(self.recorder, transcribe_options(self.settings, LIVE))
 
     def _update_level(self) -> None:
         self.waveform.push(self.recorder.level)
@@ -512,15 +605,7 @@ class MainWindow(QMainWindow):
         self._duration = 0.0
         self._update_controls()
         self._status("Analyse de l'audio…" if self.model_ready else "En attente du modèle…")
-        self.worker.transcribe(audio, self.transcribe_options(word_timestamps=True))  # precise subtitle cuts
-
-    def transcribe_options(self, word_timestamps: bool = False) -> TranscribeOptions:
-        return TranscribeOptions(
-            language=self.settings.language,
-            vad_filter=self.settings.vad_filter,
-            word_timestamps=word_timestamps,
-            hotwords=self.settings.hotwords_prompt(),
-        )
+        self.worker.transcribe(audio, transcribe_options(self.settings, FILE))
 
     def _model_changed(self, key: str) -> None:
         self._set_setting("model_key", key)
@@ -555,7 +640,12 @@ class MainWindow(QMainWindow):
         if not target.suffix:
             target = target.with_suffix(suffix)
         try:
-            export.export(target, self.segments)
+            export.export(
+                target,
+                self.segments,
+                max_chars=self.settings.subtitle_max_chars,
+                max_lines=self.settings.subtitle_max_lines,
+            )
         except Exception as exc:
             self.transcript.show_error(f"Échec de l'export : {exc}")
             return
@@ -728,6 +818,7 @@ class MainWindow(QMainWindow):
             self._transcribe_file(path)
 
     def _open_settings(self) -> None:
+        self._sync_popover()
         self.settings_popover.popup_below(self.settings_button)
 
     def quit_app(self) -> None:

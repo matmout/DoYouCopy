@@ -10,8 +10,9 @@ from PySide6.QtCore import QObject, Signal
 from mywhisper.audio.recorder import MicRecorder
 from mywhisper.config import Settings
 from mywhisper.core.textproc import postprocess
-from mywhisper.core.types import SAMPLE_RATE, TranscribeOptions
+from mywhisper.core.types import SAMPLE_RATE
 from mywhisper.dictation import inject, sounds
+from mywhisper.options import DICTATION, transcribe_options
 
 log = logging.getLogger(__name__)
 
@@ -109,12 +110,7 @@ class DictationController(QObject):
         self._set_state(TRANSCRIBING)
         if self.overlay is not None:
             self.overlay.show_transcribing()
-        options = TranscribeOptions(
-            language=self.settings.language,
-            vad_filter=True,
-            hotwords=self.settings.hotwords_prompt(),
-        )
-        self.worker.dictate(audio, options, self._job)
+        self.worker.dictate(audio, transcribe_options(self.settings, DICTATION), self._job)
 
     def cancel(self) -> None:
         if self.state == RECORDING:
@@ -137,6 +133,8 @@ class DictationController(QObject):
         if not text:
             self._message("Rien entendu")
             return
+        if self.settings.dictation_trailing_space and not text.endswith(("\n", " ")):
+            text += " "
         if self.settings.dictation_output == "paste" and not self.foreground_is_own():
             self.paster.paste(text)
             self._message("Texte inséré")

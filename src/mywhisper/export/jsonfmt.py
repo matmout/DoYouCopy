@@ -11,7 +11,7 @@ class JsonExporter:
     suffix = ".json"
     label = "JSON (segments et mots)"
 
-    def render(self, segments: Sequence[Segment]) -> str:
+    def render(self, segments: Sequence[Segment], **_options) -> str:
         data = {
             "segments": [
                 {

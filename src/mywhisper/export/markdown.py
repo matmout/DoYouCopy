@@ -17,7 +17,7 @@ class MarkdownExporter:
     suffix = ".md"
     label = "Markdown"
 
-    def render(self, segments: Sequence[Segment]) -> str:
+    def render(self, segments: Sequence[Segment], **_options) -> str:
         return "\n\n".join(f"*[{timecode(s.start)}]* {s.text}" for s in segments if s.text) + "\n"
 
 

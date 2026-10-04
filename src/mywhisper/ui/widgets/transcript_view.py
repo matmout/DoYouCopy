@@ -249,6 +249,10 @@ class TranscriptView(QFrame):
     def show_loading(self, label: str) -> None:
         self.show_loading_text(f"Chargement de {label}…")
 
+    def set_font_size(self, points: int) -> None:
+        self.editor.setFont(theme.ui_font(points))
+        self.editor.apply_column()
+
     def show_loading_text(self, text: str) -> None:
         self.skeleton.label.setText(text)
         self.pages.setCurrentWidget(self.skeleton)

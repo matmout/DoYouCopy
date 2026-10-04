@@ -11,7 +11,7 @@ class Exporter(Protocol):
     suffix: str
     label: str
 
-    def render(self, segments: Sequence[Segment]) -> str | bytes: ...
+    def render(self, segments: Sequence[Segment], **options) -> str | bytes: ...
 
 
 _EXPORTERS: dict[str, Exporter] = {}
@@ -26,11 +26,12 @@ def exporters() -> list[Exporter]:
     return list(_EXPORTERS.values())
 
 
-def export(path: Path, segments: Sequence[Segment]) -> None:
+def export(path: Path, segments: Sequence[Segment], **options) -> None:
+    """options: max_chars / max_lines for subtitles; other formats ignore them."""
     exporter = _EXPORTERS.get(path.suffix.lower())
     if exporter is None:
         raise ValueError(f"Format non pris en charge : {path.suffix or '(aucune extension)'}")
-    data = exporter.render(segments)
+    data = exporter.render(segments, **options)
     if isinstance(data, bytes):
         path.write_bytes(data)
     else:

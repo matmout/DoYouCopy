@@ -199,6 +199,32 @@ QComboBox QAbstractItemView {{
     selection-background-color: {t.border}; selection-color: {t.text}; padding: 4px;
 }}
 
+QSpinBox, QDoubleSpinBox, QLineEdit, QPlainTextEdit, QKeySequenceEdit QLineEdit {{
+    background: {t.elevated}; border: 1px solid {t.border}; border-radius: {r}px;
+    padding: 5px 8px; font-size: 13px; selection-background-color: {t.accent};
+    selection-color: {t.on_accent};
+}}
+QSpinBox:focus, QDoubleSpinBox:focus, QLineEdit:focus, QPlainTextEdit:focus {{ border-color: {t.muted}; }}
+QSpinBox::up-button, QSpinBox::down-button, QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{
+    width: 16px; border: none; background: transparent; }}
+QSlider::groove:horizontal {{ height: 4px; background: {t.border}; border-radius: 2px; }}
+QSlider::sub-page:horizontal {{ background: {t.accent}; border-radius: 2px; }}
+QSlider::handle:horizontal {{ background: {t.text}; width: 14px; height: 14px; margin: -5px 0;
+    border-radius: 7px; }}
+QTableWidget {{ background: {t.elevated}; border: 1px solid {t.border}; border-radius: {r}px;
+    gridline-color: {t.border}; }}
+QHeaderView::section {{ background: {t.surface}; color: {t.muted}; border: none; padding: 4px 8px; }}
+
+#SettingsNav {{ background: transparent; border: none; font-size: 13px; outline: none; }}
+#SettingsNav::item {{ padding: 8px 12px; border-radius: 6px; margin: 1px 0; }}
+#SettingsNav::item:selected {{ background: {t.elevated}; color: {t.text}; }}
+#SettingsNav::item:hover:!selected {{ background: {t.surface}; }}
+#SettingsPage {{ background: transparent; }}
+#SettingsTitle {{ font-size: 17px; font-weight: 600; }}
+#SettingsSection {{ font-size: 11px; color: {t.muted}; font-weight: 600; }}
+#SettingsHint {{ font-size: 12px; color: {t.muted}; }}
+#SettingsWarning {{ font-size: 12px; color: {t.accent}; }}
+
 QCheckBox {{ spacing: 10px; font-size: 13px; }}
 QCheckBox::indicator {{
     width: 16px; height: 16px; border-radius: 4px;

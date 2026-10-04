@@ -34,7 +34,7 @@ class DocxExporter:
     suffix = ".docx"
     label = "Document Word"
 
-    def render(self, segments: Sequence[Segment]) -> bytes:
+    def render(self, segments: Sequence[Segment], **_options) -> bytes:
         paragraphs = "".join(PARAGRAPH.format(text=escape(s.text)) for s in segments if s.text)
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:

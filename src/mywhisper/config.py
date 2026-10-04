@@ -35,8 +35,30 @@ class Settings:
     theme: str = "dark"  # "auto" (follow Windows), "dark" or "light"
     input_device: str | None = None  # device name; indices change between sessions
     device: str = "auto"  # "auto", "gpu" or "cpu"
+    compute_type: str = "auto"  # "auto" or a CTranslate2 type (float16, int8_float16, int8…)
+    cpu_threads: int = 0  # 0 = one per physical core
     allow_download: bool = True
     models_dir: str = field(default_factory=lambda: str(default_models_dir()))
+    # transcription
+    task: str = "transcribe"  # or "translate" (to English)
+    multilingual: bool = False
+    initial_prompt: str = ""  # context given to the model: topic, names, style
+    beam_size: int = 0  # 0 = the model's default
+    condition_previous: str = "auto"  # "auto", "on" or "off"
+    vad_threshold: float = 0.5
+    vad_min_silence_ms: int = 500
+    skip_silence_hallucinations: bool = True
+    no_speech_threshold: float = 0.6
+    repetition_penalty: float = 1.0
+    batch_size: int = 0  # files: 0 = sequential, 8 / 16 = batched (GPU)
+    # live mode
+    live_step_s: float = 1.0
+    live_endpoint_s: float = 0.8
+    # display and exports
+    transcript_font_size: int = 12
+    subtitle_max_chars: int = 42
+    subtitle_max_lines: int = 2
+    default_export: str = ".txt"
     # vocabulary
     hotwords: list[str] = field(default_factory=list)
     replacements: list[list[str]] = field(default_factory=list)  # [heard, written] pairs
@@ -47,6 +69,7 @@ class Settings:
     dictation_mode: str = "hold"  # "hold" (push-to-talk) or "toggle"
     dictation_output: str = "paste"  # "paste" into the active app or "clipboard" only
     dictation_sounds: bool = True
+    dictation_trailing_space: bool = True  # successive dictations do not stick together
     close_to_tray: bool = True
 
     def hotwords_prompt(self) -> str | None:

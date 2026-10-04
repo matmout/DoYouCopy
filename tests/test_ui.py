@@ -34,6 +34,10 @@ class FakeEngine:
     def unload(self):
         self.model = None
 
+    def configure(self, **kwargs):
+        self.configured = kwargs
+        self.unload()
+
     def transcribe(self, audio, options):
         if self.fail:
             raise RuntimeError("boom")
@@ -93,7 +97,7 @@ class FakeLive:
     ]
     FLUSH = LiveUpdate([words_segment((1.5, " Ceci"), (1.8, " est"), (2.0, " un"), (2.2, " test."))])
 
-    def __init__(self, engine, options) -> None:
+    def __init__(self, engine, options, config=None) -> None:
         self.updates = list(self.UPDATES)
 
     def feed(self, samples):

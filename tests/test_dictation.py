@@ -147,7 +147,7 @@ def test_hold_cycle_pastes_processed_text(app, make):
     hook.released.emit()
     assert controller.state == TRANSCRIBING
     wait_until(app, lambda: controller.state == IDLE)
-    assert parts["paster"].pasted == ["Bonjour, ça roule ?"]
+    assert parts["paster"].pasted == ["Bonjour, ça roule ? "]
     assert not hook.armed
     assert len(parts["sounds"]) == 2
     assert ("message", "Texte inséré", False) in parts["overlay"].calls
@@ -180,7 +180,7 @@ def test_clipboard_output_and_own_window(app, make):
 
 
 def test_voice_commands_can_be_disabled(app, make):
-    controller, parts = make(voice_commands=False)
+    controller, parts = make(voice_commands=False, dictation_trailing_space=False)
     controller.on_pressed()
     controller.on_released()
     wait_until(app, lambda: controller.state == IDLE)

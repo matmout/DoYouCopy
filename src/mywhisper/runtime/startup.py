@@ -34,17 +34,17 @@ class CpuNotice:
 
 def prepare(device_preference: str) -> RuntimeChoice:
     """Puts the right ctranslate2 on the path. Call before importing ctranslate2."""
-    if device_preference == "cpu":
-        store.activate(None)
-        return RuntimeChoice(None, forced_cpu=True)
+    forced_cpu = device_preference == "cpu"
+    # An installed runtime is always activated, even when the CPU is chosen: the user
+    # can then switch to the GPU in the settings without restarting.
     for variant in (gpu_detect.NVIDIA, gpu_detect.AMD):
         package = package_for(variant)
         if package is not None and store.is_installed(package):
             store.activate(package)
             log.info("GPU runtime: %s", package.label)
-            return RuntimeChoice(variant)
+            return RuntimeChoice(variant, forced_cpu)
     store.activate(None)
-    return RuntimeChoice(None if store.is_frozen() else "dev")
+    return RuntimeChoice(None if store.is_frozen() else "dev", forced_cpu)
 
 
 def cpu_notice(choice: RuntimeChoice, detection: gpu_detect.Detection | None = None) -> CpuNotice | None:

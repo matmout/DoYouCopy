@@ -78,3 +78,37 @@ def test_live_transcription_on_gpu(engine, speech_wav):
     for word in ("quick", "brown", "fox", "lazy", "dog"):
         assert word in text
     assert all(a.end <= b.start + 0.5 for a, b in zip(committed, committed[1:]))
+
+
+def test_batched_inference_and_advanced_options_on_gpu(engine, speech_wav):
+    engine.load(MODELS["turbo"])
+    options = TranscribeOptions(
+        language="en",
+        batch_size=8,
+        word_timestamps=True,
+        hallucination_silence_s=2.0,
+        beam_size=3,
+        condition_on_previous_text=False,
+        vad_threshold=0.4,
+        repetition_penalty=1.1,
+        initial_prompt="A sentence about a fox and a dog.",
+    )
+    _, segments = engine.transcribe(speech_wav, options)
+    segments = list(segments)
+    text = " ".join(s.text for s in segments).lower()
+    assert "fox" in text and "dog" in text
+    assert segments[0].words  # word timestamps survive the batched path
+
+
+def test_switch_to_cpu_and_back(engine, speech_wav):
+    from mywhisper.gpu.rocm_env import cpu_device
+
+    gpu = engine.device
+    engine.configure(device=cpu_device("int8"), cpu_threads=4)
+    engine.load(MODELS["turbo"])
+    assert not engine.device.is_gpu
+    _, segments = engine.transcribe(speech_wav, TranscribeOptions(language="en"))
+    assert "fox" in " ".join(s.text for s in segments).lower()
+    engine.configure(device=gpu)
+    engine.load(MODELS["turbo"])
+    assert engine.device.is_gpu

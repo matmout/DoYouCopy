@@ -1,10 +1,10 @@
-# MyWhisper
+# MyWhisper : guide détaillé
 
 Transcription vocale **100 % locale et hors ligne** pour Windows : faster-whisper (`large-v3-turbo` ou `large-v3`) accéléré par **ROCm** sur GPU AMD Radeon (testé sur RX 7800 XT, gfx1101), avec une fenêtre native PySide6.
 
 | Mode Direct, thème sombre | Transcription terminée, thème clair |
 |---|---|
-| ![Mode Direct](docs/apercu-direct-sombre.png) | ![Terminé](docs/apercu-termine-clair.png) |
+| ![Mode Direct](apercu-direct-sombre.png) | ![Terminé](apercu-termine-clair.png) |
 
 - **Dictée universelle** : maintenez Ctrl+Maj+Espace dans n'importe quelle application, parlez, relâchez : le texte y est collé.
 - Enregistrement depuis le micro (Ctrl+R) ou ouverture / glisser-déposer d'un fichier audio ou vidéo (wav, mp3, m4a, flac, ogg, mp4…).
@@ -169,7 +169,7 @@ Durée des passes mesurée sur RX 7800 XT (simulation sur un enregistrement de 4
 ## Construire l'installeur
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scriptsuild_installer.ps1
+powershell -ExecutionPolicy Bypass -File scriptsbuild_installer.ps1
 ```
 
 Prérequis : le `.venv` de développement et [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`). Le script :
@@ -189,8 +189,7 @@ Options de l'exécutable :
 | `--probe fichier.json` | écrit ce que voit CTranslate2 (nombre de GPU, types de calcul) |
 | `--minimized` | démarre dans la zone de notification (démarrage avec Windows) |
 
-L'accélération est installée dans `%LOCALAPPDATA%\MyWhisper
-untime` (variable `MYWHISPER_RUNTIME_DIR` pour un autre emplacement). Le journal de l'application packagée se trouve dans `%LOCALAPPDATA%\MyWhisper\logs`.
+L'accélération est installée dans `%LOCALAPPDATA%\MyWhisperuntime` (variable `MYWHISPER_RUNTIME_DIR` pour un autre emplacement). Le journal de l'application packagée se trouve dans `%LOCALAPPDATA%\MyWhisper\logs`.
 
 ## Diagnostic
 
@@ -261,7 +260,7 @@ Principes :
 
 Le mode Direct et la dictée universelle passent eux aussi par `ModelWorker` : le GPU garde un seul utilisateur. La dictée a ses propres signaux (`dictation_finished`), pour que son texte n'apparaisse pas dans la fenêtre principale.
 
-Prochaines évolutions : voir [docs/ROADMAP.md](docs/ROADMAP.md).
+Prochaines évolutions : voir [ROADMAP.md](ROADMAP.md).
 
 ## Tests
 

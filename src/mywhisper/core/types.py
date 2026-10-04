@@ -34,6 +34,8 @@ class ModelSpec:
     model_name: str
     beam_size: int
     condition_on_previous_text: bool
+    size_gb: float = 0.0  # download size, shown before downloading
+    description: str = ""
 
 
 @dataclass(frozen=True)
@@ -43,6 +45,16 @@ class TranscribeOptions:
     initial_prompt: str | None = None  # preceding text, for context across live windows
     word_timestamps: bool = False
     hotwords: str | None = None  # user vocabulary, favoured by the decoder
+    task: str = "transcribe"  # or "translate" (to English)
+    multilingual: bool = False  # language may change within the audio
+    beam_size: int = 0  # 0 = the model's default
+    condition_on_previous_text: bool | None = None  # None = the model's default
+    vad_threshold: float = 0.5  # speech probability above which audio counts as speech
+    vad_min_silence_ms: int = 500  # shorter pauses do not split the audio
+    hallucination_silence_s: float | None = None  # skip text invented in long silences
+    no_speech_threshold: float = 0.6
+    repetition_penalty: float = 1.0
+    batch_size: int = 0  # > 1: batched inference (files, needs the VAD)
 
 
 @dataclass(frozen=True)

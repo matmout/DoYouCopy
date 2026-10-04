@@ -10,7 +10,7 @@ class TxtExporter:
     suffix = ".txt"
     label = "Texte"
 
-    def render(self, segments: Sequence[Segment]) -> str:
+    def render(self, segments: Sequence[Segment], **_options) -> str:
         return "\n".join(s.text for s in segments if s.text) + "\n"
 
 

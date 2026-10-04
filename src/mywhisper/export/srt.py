@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 from mywhisper.core.types import Segment
 from mywhisper.export.base import register
-from mywhisper.export.subtitles import build_cues
+from mywhisper.export.subtitles import MAX_CHARS, MAX_LINES, build_cues
 
 
 def srt_timestamp(seconds: float, separator: str = ",") -> str:
@@ -19,10 +19,12 @@ class SrtExporter:
     suffix = ".srt"
     label = "Sous-titres SRT"
 
-    def render(self, segments: Sequence[Segment]) -> str:
+    def render(
+        self, segments: Sequence[Segment], max_chars: int = MAX_CHARS, max_lines: int = MAX_LINES, **_options
+    ) -> str:
         blocks = [
             f"{i}\n{srt_timestamp(c.start)} --> {srt_timestamp(c.end)}\n{c.text}\n"
-            for i, c in enumerate(build_cues(segments), start=1)
+            for i, c in enumerate(build_cues(segments, max_chars, max_lines), start=1)
         ]
         return "\n".join(blocks)
 

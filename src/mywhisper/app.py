@@ -31,11 +31,12 @@ def main() -> int:
     if "--setup-runtime" in args:  # end of the installer
         return run_runtime_setup(settings)
 
-    device = detect_device(settings.device)
+    device = detect_device(settings.device, settings.compute_type)
     log.info("Inference device: %s (runtime %s)", device.description, choice.variant)
     engine = FasterWhisperEngine(
         device, Path(settings.models_dir), allow_download=settings.allow_download
     )
+    engine.configure(cpu_threads=settings.cpu_threads)
 
     from PySide6.QtWidgets import QApplication
 
@@ -49,13 +50,16 @@ def main() -> int:
     worker = ModelWorker(engine)
     window = MainWindow(settings, worker, device.description)
     window.setWindowIcon(theme.icon("ph.microphone-fill", window.tokens, "accent"))
+    window.runtime_variant = choice.variant
     if not device.is_gpu:
         window.set_cpu_notice(startup.cpu_notice(choice))
     window.install_runtime_requested.connect(lambda: install_runtime_from_app(window))
     tray = setup_dictation(app, window, settings, worker)
     if "--minimized" not in args or tray is None:
         window.show()
-    return app.exec()
+    code = app.exec()
+    engine.unload()  # frees the model, or keeps it alive where freeing would hang
+    return code
 
 
 def setup_logging() -> None:
