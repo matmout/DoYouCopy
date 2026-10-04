@@ -4,7 +4,16 @@ import logging
 from pathlib import Path
 
 from PySide6.QtCore import QTimer
-from PySide6.QtGui import QAction, QDragEnterEvent, QDropEvent, QGuiApplication, QKeySequence
+from PySide6.QtGui import (
+    QAction,
+    QDragEnterEvent,
+    QDropEvent,
+    QGuiApplication,
+    QKeySequence,
+    QPalette,
+    QTextCharFormat,
+    QTextCursor,
+)
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -23,8 +32,9 @@ from PySide6.QtWidgets import (
 from mywhisper import export
 from mywhisper.audio.recorder import MicRecorder, list_input_devices
 from mywhisper.config import Settings
+from mywhisper.core.live import SENTENCE_END, LiveUpdate, merge_sentences
 from mywhisper.core.models import MODELS
-from mywhisper.core.types import SAMPLE_RATE, AudioSource, Segment, TranscribeOptions
+from mywhisper.core.types import SAMPLE_RATE, AudioSource, Segment, TranscribeOptions, Word
 from mywhisper.ui.workers import ModelWorker
 
 log = logging.getLogger(__name__)
@@ -65,6 +75,9 @@ class MainWindow(QMainWindow):
         self.source_name = "transcription"
         self.busy = False
         self.model_ready = False
+        self.live = False  # live session running (or finishing its final pass)
+        self._provisional_start = 0  # text position where the provisional live text begins
+        self._live_last = ""  # last committed live word, to choose the next separator
 
         self.setWindowTitle("MyWhisper")
         self.resize(820, 560)
@@ -82,6 +95,10 @@ class MainWindow(QMainWindow):
         self.record_button = QPushButton("● Enregistrer")
         self.record_button.setShortcut(QKeySequence("Ctrl+R"))
         self.record_button.clicked.connect(self._toggle_recording)
+        self.live_button = QPushButton("◉ Direct")
+        self.live_button.setShortcut(QKeySequence("Ctrl+L"))
+        self.live_button.setToolTip("Transcription en temps réel pendant que vous parlez (Ctrl+L)")
+        self.live_button.clicked.connect(self._toggle_live)
         self.open_button = QPushButton("Ouvrir un fichier…")
         self.open_button.setShortcut(QKeySequence.StandardKey.Open)
         self.open_button.clicked.connect(self._open_file)
@@ -115,6 +132,7 @@ class MainWindow(QMainWindow):
 
         actions = QHBoxLayout()
         actions.addWidget(self.record_button)
+        actions.addWidget(self.live_button)
         actions.addWidget(self.open_button)
         actions.addWidget(self.cancel_button)
         actions.addStretch()
@@ -185,6 +203,8 @@ class MainWindow(QMainWindow):
         w.transcription_started.connect(self._on_started)
         w.segment_ready.connect(self._on_segment)
         w.transcription_finished.connect(self._on_finished)
+        w.live_update.connect(self._on_live_update)
+        w.live_finished.connect(self._on_live_finished)
         w.error.connect(self._on_error)
 
     # ---- actions ------------------------------------------------------
@@ -219,7 +239,38 @@ class MainWindow(QMainWindow):
     def _update_recording(self) -> None:
         self.level_bar.setValue(int(self.recorder.level * 100))
         self.record_seconds += self.level_timer.interval() / 1000
-        self.statusBar().showMessage(f"Enregistrement… {_clock(self.record_seconds)}")
+        if not self.live:
+            self.statusBar().showMessage(f"Enregistrement… {_clock(self.record_seconds)}")
+
+    def _toggle_live(self) -> None:
+        if self.live:
+            self.live_button.setEnabled(False)
+            self.statusBar().showMessage("Fin du direct…")
+            self.worker.stop_live()
+            return
+        self.recorder.device_name = self.mic_combo.currentData()
+        try:
+            self.recorder.start()
+        except Exception as exc:
+            log.exception("Microphone start failed")
+            QMessageBox.warning(self, "Micro", f"Impossible d'ouvrir le micro :\n{exc}")
+            return
+        self.live = True
+        self.segments = []
+        self.text.clear()
+        self._provisional_start = 0
+        self._live_last = ""
+        self.source_name = "direct"
+        self.record_seconds = 0.0
+        self.level_bar.show()
+        self.level_timer.start()
+        self._update_controls()
+        message = "Direct : parlez, le texte s'affiche au fil de l'eau."
+        if self.model_combo.currentData() != "turbo":
+            message += " (modèle précis : latence plus élevée)"
+        self.statusBar().showMessage(message)
+        options = TranscribeOptions(language=self.language_combo.currentData())
+        self.worker.start_live(self.recorder, options)
 
     def _open_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Ouvrir un fichier audio", "", AUDIO_FILTER)
@@ -300,6 +351,52 @@ class MainWindow(QMainWindow):
         self.text.appendPlainText(self._format(segment))
         self._update_controls()
 
+    def _on_live_update(self, update: LiveUpdate, pass_seconds: float) -> None:
+        if not self.live:
+            return
+        self.segments.extend(update.committed)
+        # Committed words are appended; the provisional tail is replaced on every pass.
+        cursor = self.text.textCursor()
+        cursor.setPosition(self._provisional_start)
+        cursor.movePosition(QTextCursor.MoveOperation.End, QTextCursor.MoveMode.KeepAnchor)
+        cursor.removeSelectedText()
+        normal = QTextCharFormat()
+        for segment in update.committed:
+            for word in segment.words or (Word(segment.start, segment.end, " " + segment.text),):
+                cursor.insertText(self._live_join(word.text), normal)
+                self._live_last = word.text
+        self._provisional_start = cursor.position()
+        if update.provisional:
+            provisional = QTextCharFormat()
+            provisional.setForeground(self.text.palette().color(QPalette.ColorRole.PlaceholderText))
+            provisional.setFontItalic(True)
+            cursor.insertText(self._live_join(" " + update.provisional), provisional)
+        scrollbar = self.text.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+        if pass_seconds:
+            self.statusBar().showMessage(
+                f"Direct… {_clock(self.record_seconds)} · passe GPU {pass_seconds:.2f} s"
+            )
+        self._update_controls()
+
+    def _live_join(self, word: str) -> str:
+        """Whisper words carry their leading space; a finished sentence starts a new line."""
+        if not self._live_last:
+            return word.lstrip()
+        if self._live_last.rstrip().endswith(SENTENCE_END):
+            return "\n" + word.lstrip()
+        return word
+
+    def _on_live_finished(self) -> None:
+        self.live = False
+        self.level_timer.stop()
+        self.level_bar.hide()
+        self.recorder.stop()
+        self.segments = merge_sentences(self.segments)
+        self._render_text()
+        self.statusBar().showMessage(f"Direct terminé : {len(self.segments)} segment(s).", 5000)
+        self._update_controls()
+
     def _on_finished(self, elapsed: float, duration: float, cancelled: bool) -> None:
         self.busy = False
         self._update_controls()
@@ -330,19 +427,25 @@ class MainWindow(QMainWindow):
 
     def _render_text(self) -> None:
         self.text.setPlainText("\n".join(self._format(s) for s in self.segments))
+        self._provisional_start = self.text.document().characterCount() - 1
 
     def _update_controls(self) -> None:
-        recording = self.recorder.is_recording
+        recording = self.recorder.is_recording and not self.live
+        idle = not (self.busy or self.live)
         self.record_button.setText("■ Arrêter" if recording else "● Enregistrer")
-        self.record_button.setEnabled(not self.busy)
-        self.open_button.setEnabled(not self.busy and not recording)
+        self.record_button.setEnabled(not self.busy and not self.live)
+        self.live_button.setText("■ Arrêter le direct" if self.live else "◉ Direct")
+        if not self.live:
+            self.live_button.setEnabled(idle and not recording)
+        self.open_button.setEnabled(idle and not recording)
         self.cancel_button.setVisible(self.busy)
-        self.model_combo.setEnabled(not self.busy)
-        self.mic_combo.setEnabled(not recording)
+        self.model_combo.setEnabled(idle)
+        self.language_combo.setEnabled(not self.live)
+        self.mic_combo.setEnabled(not self.recorder.is_recording)
         has_text = bool(self.segments)
         self.copy_button.setEnabled(has_text)
-        self.export_button.setEnabled(has_text and not self.busy)
-        self.clear_button.setEnabled(has_text and not self.busy)
+        self.export_button.setEnabled(has_text and idle)
+        self.clear_button.setEnabled(has_text and idle)
 
     # ---- Qt events ----------------------------------------------------
 
@@ -355,6 +458,7 @@ class MainWindow(QMainWindow):
         self._transcribe_file(Path(event.mimeData().urls()[0].toLocalFile()))
 
     def closeEvent(self, event) -> None:
+        self.worker.stop_live()
         if self.recorder.is_recording:
             self.recorder.stop()
         self.settings.model_key = self.model_combo.currentData()

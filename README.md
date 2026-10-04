@@ -3,6 +3,7 @@
 Transcription vocale **100 % locale et hors ligne** pour Windows : faster-whisper (`large-v3-turbo` ou `large-v3`) accéléré par **ROCm** sur GPU AMD Radeon (testé sur RX 7800 XT, gfx1101), avec une fenêtre native PySide6.
 
 - Enregistrement depuis le micro (Ctrl+R) ou ouverture / glisser-déposer d'un fichier audio ou vidéo (wav, mp3, m4a, flac, ogg, mp4…).
+- **Mode Direct** (Ctrl+L) : le texte s'affiche pendant que vous parlez.
 - Affichage progressif : chaque segment apparaît dès qu'il est décodé.
 - Choix du modèle : **turbo** (rapide, beam 1) ou **large-v3** (précis, beam 5).
 - Langue forcée ou détection automatique, filtre des silences (Silero VAD).
@@ -50,6 +51,7 @@ Les modèles sont stockés dans `%LOCALAPPDATA%\MyWhisper\models`. Pour changer 
 | Raccourci | Action |
 |---|---|
 | Ctrl+R | Démarrer / arrêter l'enregistrement |
+| Ctrl+L | Démarrer / arrêter le mode Direct |
 | Ctrl+O | Ouvrir un fichier |
 | Ctrl+S | Exporter (TXT / SRT) |
 
@@ -57,6 +59,29 @@ Les réglages (modèle, langue, VAD, micro, horodatage) sont enregistrés dans `
 
 - `"device"` : `"auto"` (par défaut), `"gpu"` ou `"cpu"` ;
 - `"allow_download"` : `false` interdit tout accès réseau, même si un modèle manque.
+
+## Mode Direct
+
+Le bouton **◉ Direct** transcrit en continu, sans attendre la fin d'un enregistrement :
+
+- le texte **gris italique** est provisoire : c'est l'hypothèse en cours, qui peut encore changer ;
+- le texte **noir** est validé : il ne bouge plus.
+
+À l'arrêt, le texte est regroupé en phrases. La copie et l'export TXT/SRT fonctionnent comme pour un enregistrement.
+
+Whisper ne sait pas traiter un flux audio en continu. MyWhisper re-transcrit donc chaque seconde une fenêtre glissante d'audio, en suivant la méthode LocalAgreement de [whisper_streaming](https://github.com/ufal/whisper_streaming), implémentée dans `core/live.py` :
+
+- un mot est validé quand **deux passes successives** s'accordent dessus et qu'il ne se termine pas au bord de la fenêtre. C'est là que Whisper a tendance à « deviner » la suite de la phrase ;
+- les mots déjà validés sont reconnus dans les passes suivantes grâce à leurs timestamps, puis ignorés ;
+- l'audio n'est coupé qu'à des endroits sûrs : dans une pause détectée par Silero VAD, ou à une frontière de segment déjà validée si vous parlez plus de 15 s sans pause ;
+- aucune passe n'est lancée pendant les silences, ce qui évite les hallucinations.
+
+Durée des passes mesurée sur RX 7800 XT (simulation sur un enregistrement de 42 s) et latences qui en découlent :
+
+| Modèle | Passe moyenne (mesurée) | Texte provisoire (estimé) | Texte validé (estimé) |
+|---|---|---|---|
+| turbo (recommandé) | ~0,4 s | ~1 à 1,5 s après la parole | ~2 s, ou dès une pause |
+| large-v3 | ~0,9 s | ~2 s | ~3 s |
 
 ## Diagnostic
 
@@ -80,6 +105,7 @@ src/mywhisper/
     types.py          Segment, ModelSpec, TranscribeOptions, DeviceConfig…
     models.py         registre des modèles (turbo / precise)
     engine.py         Protocol TranscriptionEngine + FasterWhisperEngine
+    live.py           mode Direct : fenêtre glissante + accord LocalAgreement
   audio/recorder.py   capture micro 16 kHz mono (sounddevice)
   export/             exporteurs enregistrés par extension (txt, srt)
   ui/
@@ -96,7 +122,9 @@ Principes :
 - **Les segments sont émis un par un** depuis le générateur de faster-whisper. C'est ce qui produit l'affichage progressif et permet d'annuler entre deux segments.
 - **Ajouter un modèle** revient à ajouter une entrée `ModelSpec` dans `core/models.py`. **Ajouter un format d'export** revient à créer une classe avec `suffix`, `label` et `render()`, puis à appeler `register()`.
 
-Pistes d'évolution : raccourci global de dictée avec copie dans le presse-papiers, icône dans la zone de notification, dictée en continu par fenêtres glissantes. Toutes se branchent sur `ModelWorker`.
+Le mode Direct tourne lui aussi dans `ModelWorker`, sous forme de boucle : le GPU garde un seul utilisateur.
+
+Pistes d'évolution : raccourci global de dictée avec copie dans le presse-papiers, icône dans la zone de notification, sortie du mode Direct vers une autre application. Toutes se branchent sur `ModelWorker`.
 
 ## Tests
 

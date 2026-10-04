@@ -80,10 +80,15 @@ class MicRecorder:
         self._stream.close()
         self._stream = None
         self._level = 0.0
+        return self.drain()
+
+    def drain(self) -> np.ndarray:
+        """Samples captured since the previous call (16 kHz), for live transcription."""
         with self._lock:
             chunks, self._chunks = self._chunks, []
-        samples = np.concatenate(chunks) if chunks else np.zeros(0, dtype=np.float32)
-        return resample(samples, self._rate)
+        if not chunks:
+            return np.zeros(0, dtype=np.float32)
+        return resample(np.concatenate(chunks), self._rate)
 
     def _open(self, device: int | None, rate: int) -> sd.InputStream:
         stream = sd.InputStream(

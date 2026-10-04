@@ -13,10 +13,18 @@ SAMPLE_RATE = 16000
 
 
 @dataclass(frozen=True)
+class Word:
+    start: float
+    end: float
+    text: str  # as produced by Whisper, usually with a leading space
+
+
+@dataclass(frozen=True)
 class Segment:
     start: float
     end: float
     text: str
+    words: tuple[Word, ...] = ()  # filled when word timestamps are requested
 
 
 @dataclass(frozen=True)
@@ -32,6 +40,8 @@ class ModelSpec:
 class TranscribeOptions:
     language: str | None = None  # None = auto-detect
     vad_filter: bool = True
+    initial_prompt: str | None = None  # preceding text, for context across live windows
+    word_timestamps: bool = False
 
 
 @dataclass(frozen=True)

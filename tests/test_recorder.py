@@ -20,3 +20,16 @@ def test_resample_preserves_tone():
 def test_resample_noop():
     x = np.ones(10, dtype=np.float32)
     assert resample(x, 16000) is x
+
+
+def test_drain_returns_only_new_audio():
+    from mywhisper.audio.recorder import MicRecorder
+
+    recorder = MicRecorder()
+    block = np.ones((1600, 1), dtype=np.float32)
+    recorder._callback(block, 1600, None, None)
+    assert recorder.drain().shape == (1600,)
+    assert recorder.drain().size == 0
+    recorder._callback(block * 0.5, 1600, None, None)
+    recorder._callback(block * 0.5, 1600, None, None)
+    assert recorder.drain().shape == (3200,)

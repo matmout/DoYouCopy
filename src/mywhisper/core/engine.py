@@ -13,6 +13,7 @@ from mywhisper.core.types import (
     Segment,
     TranscribeOptions,
     TranscriptionInfo,
+    Word,
 )
 from mywhisper.gpu.rocm_env import CPU
 
@@ -102,10 +103,20 @@ class FasterWhisperEngine:
             beam_size=self._spec.beam_size,
             condition_on_previous_text=self._spec.condition_on_previous_text,
             vad_filter=options.vad_filter,
+            initial_prompt=options.initial_prompt,
+            word_timestamps=options.word_timestamps,
             vad_parameters={"min_silence_duration_ms": 500} if options.vad_filter else None,
         )
         result = TranscriptionInfo(info.language, info.language_probability, info.duration)
-        return result, (Segment(s.start, s.end, s.text.strip()) for s in segments)
+        return result, (
+            Segment(
+                s.start,
+                s.end,
+                s.text.strip(),
+                tuple(Word(w.start, w.end, w.word) for w in s.words or ()),
+            )
+            for s in segments
+        )
 
     def _resolve(self, spec: ModelSpec) -> str:
         """Local cache first (works offline), then download if allowed."""
