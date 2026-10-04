@@ -53,8 +53,8 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 [CustomMessages]
 fr.SetupRuntime=Détection de la carte graphique et téléchargement de l'accélération…
 en.SetupRuntime=Detecting the graphics card and downloading GPU acceleration…
-fr.DeleteData=Supprimer aussi les modèles téléchargés, l'accélération graphique et les réglages de MyWhisper ?%n%nChoisissez Non pour les garder (réinstallation plus rapide).
-en.DeleteData=Also delete the downloaded models, the GPU acceleration and MyWhisper's settings?%n%nChoose No to keep them (faster reinstall).
+fr.DeleteData=Supprimer aussi l'historique (dictées, transcriptions et enregistrements audio), les modèles téléchargés et les réglages de MyWhisper ?%n%nChoisissez Non pour les garder (réinstallation plus rapide).
+en.DeleteData=Also delete the history (dictations, transcripts and audio recordings), the downloaded models and MyWhisper's settings?%n%nChoose No to keep them (faster reinstall).
 fr.LaunchApp=Lancer MyWhisper
 en.LaunchApp=Launch MyWhisper
 fr.StartMenuIcon=Créer un raccourci dans le menu Démarrer
