@@ -262,8 +262,9 @@ def test_new_capture_hides_the_player_and_file_is_playable(app, window, tmp_path
     assert w.player.path is None and not w.player.isVisibleTo(w)
 
 
-def test_deleting_the_open_entry_releases_and_deletes_its_audio(app, window):
-    # Windows cannot delete a file the media player still holds open.
+def test_deleting_the_open_entry_releases_and_deletes_its_audio(app, window, monkeypatch):
+    # Windows cannot delete a file the media player still holds open, and the player
+    # releases it asynchronously: slower machines still hold it for a moment.
     w, store = window
     entry_id = store.save(kind="record", title="Enregistrement", segments=list(TIMED), language="fr")
     store.attach_audio(entry_id, np.zeros(3 * SAMPLE_RATE, dtype=np.float32), wait=True)
@@ -271,6 +272,18 @@ def test_deleting_the_open_entry_releases_and_deletes_its_audio(app, window):
     w._open_history_entry(entry_id)
     w.player.toggle()
     app.processEvents()
+
+    real_unlink, refusals = type(audio).unlink, [3]
+
+    def still_open(self, missing_ok=False):
+        if self == audio and refusals[0]:
+            refusals[0] -= 1
+            raise PermissionError("in use")
+        real_unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(type(audio), "unlink", still_open)
     w.history_panel.delete(entry_id, confirm=False)
     assert w.player.path is None and w.history_id is None
-    assert not audio.exists()
+    assert audio.exists()  # still held: retried
+    wait_until(app, lambda: not audio.exists())
+    assert refusals == [0]

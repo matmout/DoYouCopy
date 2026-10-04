@@ -242,15 +242,21 @@ class HistoryStore:
         self.db.execute("UPDATE sessions SET favorite=? WHERE id=?", (int(favorite), entry_id))
         self.db.commit()
 
-    def delete(self, entry_id: int) -> None:
-        """Removes the entry and its audio. The audio must not be open elsewhere (player):
-        Windows refuses to delete an open file, which would then stay on disk."""
+    def delete(self, entry_id: int) -> str | None:
+        """Removes the entry and its audio. Returns the audio path if Windows refused to
+        delete it (still open, e.g. a player releasing it asynchronously): the caller may
+        retry with remove_audio(); otherwise remove_orphan_audio() sweeps it at startup."""
         self.wait_for_audio()  # an encoding in progress would recreate the file afterwards
         row = self.db.execute("SELECT audio_path FROM sessions WHERE id=?", (entry_id,)).fetchone()
         self.db.execute("DELETE FROM sessions WHERE id=?", (entry_id,))
         self.db.commit()
-        if row is not None:
-            self._remove_audio(row["audio_path"])
+        if row is not None and not self._remove_audio(row["audio_path"]):
+            return row["audio_path"]
+        return None
+
+    def remove_audio(self, path: str) -> bool:
+        """Deletes an audio file left behind by delete(). True when it is gone."""
+        return self._remove_audio(path)
 
     def clear(self) -> None:
         """Erases the whole history, audio included."""

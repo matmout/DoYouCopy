@@ -25,6 +25,9 @@ from doyoucopy.ui.theme import Tokens
 
 SEARCH_DELAY_MS = 150
 PANEL_WIDTH = 270
+# a deleted entry's audio still open in the player: retried for RETRY_ATTEMPTS × RETRY_MS
+RETRY_ATTEMPTS = 25
+RETRY_MS = 200
 
 
 class HistoryPanel(QFrame):
@@ -163,6 +166,13 @@ class HistoryPanel(QFrame):
         if entry_id is not None:
             self.rename(entry_id)
 
+    def _retry_remove(self, path: str, attempts: int) -> None:
+        def attempt() -> None:
+            if not self.store.remove_audio(path) and attempts > 1:
+                self._retry_remove(path, attempts - 1)
+
+        QTimer.singleShot(RETRY_MS, attempt)
+
     def _delete_selected(self) -> None:
         entry_id = self._entry_id(self.list.currentItem())
         if entry_id is not None:
@@ -192,7 +202,9 @@ class HistoryPanel(QFrame):
             if answer != QMessageBox.StandardButton.Yes:
                 return
         self.deleting.emit(entry_id)
-        self.store.delete(entry_id)
+        leftover = self.store.delete(entry_id)
+        if leftover:  # the media player releases its file asynchronously
+            self._retry_remove(leftover, attempts=RETRY_ATTEMPTS)
         if entry_id == self.current_id:
             self.current_id = None
         self.refresh()
