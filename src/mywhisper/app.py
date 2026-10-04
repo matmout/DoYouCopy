@@ -45,8 +45,10 @@ def main() -> int:
     from mywhisper.ui.main_window import MainWindow
     from mywhisper.ui.workers import ModelWorker
 
+    set_app_user_model_id()
     app = QApplication(sys.argv)
     app.setApplicationName("MyWhisper")
+    app.setWindowIcon(theme.icon("ph.microphone-fill", theme.resolve(settings.theme), "accent"))
     setup_style(app, settings.theme)
     worker = ModelWorker(engine)
     window = MainWindow(settings, worker, device.description, history=open_history(settings))
@@ -61,6 +63,19 @@ def main() -> int:
     code = app.exec()
     engine.unload()  # frees the model, or keeps it alive where freeing would hang
     return code
+
+
+def set_app_user_model_id() -> None:
+    """Gives the process its own taskbar identity: launched with python.exe, Windows would
+    otherwise group the window under Python and show the interpreter's icon."""
+    if sys.platform != "win32":
+        return
+    import ctypes
+
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("MyWhisper.MyWhisper")
+    except (AttributeError, OSError):
+        log.warning("Could not set the AppUserModelID")
 
 
 def open_history(settings: Settings):
@@ -100,6 +115,7 @@ def run_runtime_setup(settings: Settings) -> int:
     from mywhisper.ui import theme
     from mywhisper.ui.runtime_dialog import RuntimeSetupDialog
 
+    set_app_user_model_id()
     app = QApplication(sys.argv)
     app.setApplicationName("MyWhisper")
     setup_style(app, settings.theme)

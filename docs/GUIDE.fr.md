@@ -200,7 +200,7 @@ L'accélération est installée dans `%LOCALAPPDATA%\MyWhisper\runtime` (variabl
 
 Chaque transcription (enregistrement, Direct, fichier) est enregistrée automatiquement dans `%LOCALAPPDATA%\MyWhisper\history`, base SQLite avec recherche plein texte (FTS5). Les longues sessions sont sauvegardées toutes les 30 secondes : un plantage ne fait perdre que les dernières secondes. Le panneau **Historique** (Ctrl+H) liste les sessions : la recherche ignore les accents et trouve les débuts de mots, un clic ouvre une transcription, le clic droit permet de la renommer (F2), de l'ajouter aux favoris ou de la supprimer (Suppr).
 
-L'audio des enregistrements micro et Direct est conservé en FLAC (environ 60 Mo par heure), puis supprimé après 30 jours par défaut ; le texte reste. Les fichiers importés ne sont pas copiés : le lecteur rejoue le fichier d'origine tant qu'il existe. Le texte des dictées universelles n'est conservé que sur option.
+L'audio des enregistrements micro et Direct est conservé en FLAC (environ 60 Mo par heure), puis supprimé après 30 jours par défaut ; le texte reste. Les fichiers importés ne sont pas copiés : le lecteur rejoue le fichier d'origine tant qu'il existe. Le texte des dictées universelles est conservé aussi (jamais leur audio), sauf si l'option est désactivée dans les réglages.
 
 ## Éditeur synchronisé
 

@@ -81,7 +81,7 @@ class Settings:
     history_enabled: bool = True
     history_keep_audio: bool = True  # microphone captures, for replay and re-transcription
     history_audio_days: int = 30  # the audio is deleted after N days, the text kept (0 = never)
-    history_dictation: bool = False  # also keep the text of universal dictations
+    history_dictation: bool = True  # also keep the text of universal dictations
     history_visible: bool = False  # side panel shown
 
     def hotwords_prompt(self) -> str | None:

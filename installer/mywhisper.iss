@@ -66,9 +66,10 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\MyWhisper"; Filename: "{app}\MyWhisper.exe"
+; Same AppUserModelID as the running app (app.py), so a pinned shortcut groups with its window.
+Name: "{group}\MyWhisper"; Filename: "{app}\MyWhisper.exe"; AppUserModelID: "MyWhisper.MyWhisper"
 Name: "{group}\{cm:UninstallProgram,MyWhisper}"; Filename: "{uninstallexe}"
-Name: "{userdesktop}\MyWhisper"; Filename: "{app}\MyWhisper.exe"; Tasks: desktopicon
+Name: "{userdesktop}\MyWhisper"; Filename: "{app}\MyWhisper.exe"; AppUserModelID: "MyWhisper.MyWhisper"; Tasks: desktopicon
 
 [Registry]
 ; "Start with Windows" is written by the app itself; only remove it on uninstall.

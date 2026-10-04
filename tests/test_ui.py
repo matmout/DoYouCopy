@@ -420,11 +420,11 @@ def test_history_options(app, history_window):
     window = make()
     window.settings.history_keep_audio = False
     window.session.recorder = FakeRecorder()
-    window.record_dictation("Texte dicté")
-    assert store.count() == 0  # dictations are not kept by default
-    window.settings.history_dictation = True
     window.record_dictation("Texte dicté\nsur deux lignes")
-    assert [e.title for e in store.list()] == ["Texte dicté"]
+    assert [e.title for e in store.list()] == ["Texte dicté"]  # dictations are kept by default
+    window.settings.history_dictation = False
+    window.record_dictation("Autre dictée")
+    assert store.count() == 1
 
     window.settings.history_enabled = False
     window.session.transcribe_file(Path("x.wav"))

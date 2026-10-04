@@ -435,7 +435,7 @@ class SettingsDialog(QDialog):
             self._check(
                 "history_dictation",
                 "Garder aussi le texte des dictées (raccourci global)",
-                "Désactivé par défaut : la dictée sert souvent pour des messages courts.",
+                "Retrouvez vos dictées dans l'historique, marquées « Dictée ».",
             ),
         )
         form = self._section(layout, "Audio")
