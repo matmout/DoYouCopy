@@ -1,271 +1,112 @@
+<div align="center">
+
 # MyWhisper
 
-Transcription vocale **100 % locale et hors ligne** pour Windows : faster-whisper (`large-v3-turbo` ou `large-v3`) accéléré par **ROCm** sur GPU AMD Radeon (testé sur RX 7800 XT, gfx1101), avec une fenêtre native PySide6.
+**Private, offline speech-to-text for Windows.**
+Dictate into any app or transcribe audio files. Everything runs on your own PC, and nothing leaves it.
 
-| Mode Direct, thème sombre | Transcription terminée, thème clair |
+![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows&logoColor=white)
+![GPU](https://img.shields.io/badge/GPU-AMD%20%7C%20NVIDIA-ED1C24)
+![CPU fallback](https://img.shields.io/badge/CPU-supported-555)
+![100% offline](https://img.shields.io/badge/privacy-100%25%20offline-2EA44F)
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
+[![License: GPL v3](https://img.shields.io/badge/license-GPL%20v3-blue)](LICENSE)
+
+| Live mode, dark theme | Finished transcript, light theme |
 |---|---|
-| ![Mode Direct](docs/apercu-direct-sombre.png) | ![Terminé](docs/apercu-termine-clair.png) |
+| ![MyWhisper live mode](docs/apercu-direct-sombre.png) | ![MyWhisper finished transcript](docs/apercu-termine-clair.png) |
 
-- **Dictée universelle** : maintenez Ctrl+Maj+Espace dans n'importe quelle application, parlez, relâchez : le texte y est collé.
-- Enregistrement depuis le micro (Ctrl+R) ou ouverture / glisser-déposer d'un fichier audio ou vidéo (wav, mp3, m4a, flac, ogg, mp4…).
-- **Mode Direct** (Ctrl+L) : le texte s'affiche pendant que vous parlez.
-- Affichage progressif : chaque segment apparaît dès qu'il est décodé.
-- Choix du modèle : **turbo** (rapide, beam 1) ou **large-v3** (précis, beam 5).
-- Langue forcée ou détection automatique, filtre des silences (Silero VAD).
-- **Vocabulaire** : mots à favoriser, remplacements, commandes vocales de ponctuation.
-- Copie (texte brut, horodaté, Markdown) et export **TXT**, **SRT**, **WebVTT**, **Markdown**, **Word** et **JSON**.
-- Repli automatique sur CPU (int8) si le GPU est indisponible.
+</div>
 
-## Comment fonctionne l'accélération AMD
+## Your voice stays on your PC
 
-faster-whisper s'appuie sur [CTranslate2](https://github.com/OpenNMT/CTranslate2). Depuis la v4.7.0, CTranslate2 publie des **wheels ROCm officielles pour Windows** (asset `rocm-python-wheels-Windows.zip`), compilées pour gfx1030, gfx110x (dont la RX 7800 XT), gfx115x et gfx120x. Elles s'appuient sur le runtime ROCm 7.2 distribué en paquets pip par AMD (`rocm_sdk_core`, `rocm_sdk_libraries_custom`). Il n'y a **rien à compiler** et **le HIP SDK n'est pas nécessaire**.
+Most dictation tools send your voice to someone else's computer. **Windows voice typing (Win + H)** uses Microsoft's online speech recognition. Google Docs voice typing, and cloud transcription services, work the same way. Your audio, and the text made from it, go to their servers. There they can be stored, analyzed or used to train models, under terms you don't control.
 
-Le GPU AMD apparaît sous le device `"cuda"` de CTranslate2 : c'est le nom historique du backend GPU, qui passe ici par HIP.
+MyWhisper works differently:
 
-## Installation (utilisateurs)
+- 🔒 **Transcription runs 100% on your machine.** Audio and text never leave it.
+- 🚫 **No account, no telemetry, no analytics, no cloud.**
+- ✈️ **Works offline.** The internet is only needed once, to download the speech model (from Hugging Face) and the GPU acceleration (from AMD, NVIDIA and PyPI). After that you can unplug the network, or turn on *strict offline mode* in the settings.
+- 📂 **Open source.** You can check every line of code that touches your audio.
 
-Téléchargez et lancez `MyWhisper-Setup-<version>.exe` (Windows 10 / 11, 64 bits). L'installation se fait dans votre profil, **sans droits administrateur**. À la fin :
+Good for meetings, interviews, medical or legal notes, or anything you'd rather not upload.
 
-1. l'installeur **détecte la carte graphique** et télécharge l'accélération correspondante depuis les sources officielles, avec des versions et des empreintes SHA-256 figées :
+## Features
 
-   | Carte | Accélération | Téléchargement |
-   |---|---|---|
-   | NVIDIA GeForce GTX 900 et plus récentes, RTX | CUDA 12 (cuBLAS + cuDNN 9) | ~1,2 Go |
-   | AMD Radeon RX 6800 / 6900, RX 7000, RX 9000, Radeon 780M / 880M / 890M | ROCm 7.2 | ~1,2 Go |
-   | Autres (Intel, AMD plus anciennes, aucune carte) | aucune : processeur | — |
+- **Dictate anywhere.** Hold **Ctrl + Shift + Space** in any app, speak, release: the text is typed where your cursor is.
+- **Live mode.** Text appears while you speak.
+- **Files.** Drag in audio or video (wav, mp3, m4a, flac, ogg, mp4…) and watch the transcript appear segment by segment.
+- **Whisper models.** *Light* (small), *Turbo* (large-v3-turbo, default) or *Precise* (large-v3). Automatic language detection, and translation to English.
+- **Custom vocabulary.** Words to favor, replacements, and voice commands for punctuation ("comma", "new line"…).
+- **Export** to TXT, SRT, WebVTT, Markdown, Word (.docx) and JSON.
 
-   La carte est ensuite testée réellement. En cas d'échec (pilote trop ancien), MyWhisper utilise le processeur et l'explique.
-2. au **premier lancement**, le modèle Turbo (~1,6 Go) se télécharge avec une barre de progression. Le modèle Précis (~3 Go) se télécharge la première fois qu'on le choisit.
+## Hardware: GPU or CPU
 
-Sans accélération, un bandeau « **Transcription plus lente sur cette machine** » en donne la raison. Si une carte compatible est présente, le bouton **Installer l'accélération** télécharge ce qu'il faut, puis redémarre MyWhisper.
+MyWhisper is built on [faster-whisper](https://github.com/SYSTRAN/faster-whisper). The installer detects your graphics card and downloads the right acceleration:
 
-L'installeur n'est pas encore signé : Windows SmartScreen affiche « Windows a protégé votre ordinateur ». Cliquez sur **Informations complémentaires**, puis sur **Exécuter quand même**.
+| Hardware | Acceleration | Speed |
+|---|---|---|
+| **NVIDIA** GeForce GTX 900 or newer, RTX | CUDA 12 | ⚡ Fast |
+| **AMD** Radeon RX 6800 / 6900, RX 7000, RX 9000, Radeon 780M / 880M / 890M | ROCm 7.2 | ⚡ Fast |
+| **No compatible GPU** (Intel, older AMD, none) | CPU (int8) | 🐢 Works, but much slower |
 
-La désinstallation (Paramètres → Applications) supprime l'application et l'accélération graphique. Elle propose aussi de supprimer les modèles et les réglages.
+For example, on a Radeon RX 7800 XT, 15 s of speech is transcribed in about 1 second (14× real time).
 
-## Installation (développement, depuis les sources)
+> [!NOTE]
+> **CPU only?** MyWhisper still works, but transcription takes a lot longer, especially with long files and the Precise model. Choose the **Light** model for the best speed. If the GPU can't be used (for example, the driver is too old), MyWhisper switches to the CPU on its own and tells you why.
 
-Prérequis :
+## Installation
 
-1. **Pilote AMD Software: Adrenalin Edition** récent ([amd.com](https://www.amd.com/en/support/download/drivers.html)).
-2. **Python 3.10 à 3.14 x64** (installé via python.org ; le lanceur `py` doit être disponible). Le script utilise 3.13 par défaut.
-3. Environ 8 Go d'espace disque : 1,1 Go de runtime ROCm, ~0,3 Go de dépendances, ~4,6 Go pour les deux modèles.
+1. Download `MyWhisper-Setup-<version>.exe` from the [Releases](https://github.com/matmout/Mywhisper/releases) page (Windows 10 / 11, 64-bit).
+2. Run it. **No administrator rights are needed**: it installs into your user profile.
+3. At the end of setup, MyWhisper detects your graphics card and downloads the matching acceleration (~1.2 GB, from official sources, with pinned versions and SHA-256 checks). It then tests the card for real.
+4. On first launch, the Turbo model (~1.6 GB) downloads with a progress bar. After that, no internet connection is needed.
 
-Puis, depuis la racine du dépôt :
+> [!TIP]
+> The installer isn't code-signed yet, so Windows SmartScreen may say *"Windows protected your PC"*. Click **More info**, then **Run anyway**.
+
+To uninstall, go to **Settings → Apps**. You can choose to keep or remove the downloaded models and settings.
+
+<details>
+<summary><b>Install from source (developers)</b></summary>
+
+Requirements: Python 3.10–3.14 (x64) and a recent GPU driver. The script below sets up the AMD ROCm build:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\install_rocm.ps1
-```
-
-Le script :
-
-1. crée `.venv` (option `-Python 3.12` pour changer de version) ;
-2. installe le runtime ROCm 7.2 depuis `repo.radeon.com` ;
-3. télécharge la wheel ROCm de CTranslate2 4.8.2 correspondant à la version de Python et l'installe ;
-4. installe MyWhisper et ses dépendances (`constraints.txt` empêche pip de remplacer ctranslate2 par la build CUDA de PyPI) ;
-5. lance `scripts/check_gpu.py`, puis télécharge les deux modèles (sauf avec `-SkipModels`).
-
-Les modèles sont stockés dans `%LOCALAPPDATA%\MyWhisper\models`. Pour changer cet emplacement, définissez la variable d'environnement `MYWHISPER_MODELS_DIR` ou la clé `models_dir` des réglages. Une fois les modèles présents, l'application n'a plus besoin du réseau : elle charge toujours le cache local en priorité.
-
-## Utilisation
-
-```powershell
 .\.venv\Scripts\mywhisper.exe
-# ou
-.\.venv\Scripts\python.exe -m mywhisper
 ```
 
-| Raccourci | Action |
-|---|---|
-| Ctrl+R | Démarrer / arrêter l'enregistrement |
-| Ctrl+L | Démarrer / arrêter le mode Direct |
-| Ctrl+O | Importer un fichier |
-| Ctrl+S | Exporter en TXT (le menu « Exporter » propose les autres formats) |
-| Ctrl+Maj+Espace | Dictée universelle, depuis n'importe quelle application (modifiable) |
+It creates `.venv`, installs the ROCm runtime and the ROCm build of CTranslate2, installs MyWhisper, checks the GPU and downloads the models. To build the installer, use `scripts\build_installer.ps1` (needs [Inno Setup 6](https://jrsoftware.org/isinfo.php)).
 
-Le grand bouton micro démarre et arrête la capture dans le mode choisi au-dessus (Enregistrement ou Direct). En haut, le choix du modèle (**Léger**, **Turbo**, **Précis**) et de la langue. Le bouton **Réglages** ouvre les réglages rapides : silences, horodatage, vocabulaire, micro, thème. **Tous les réglages…** ouvre la fenêtre complète.
-
-## Réglages
-
-Chaque changement s'applique tout de suite et est enregistré dans `%APPDATA%\MyWhisper\settings.json`.
-
-| Section | Réglages |
-|---|---|
-| Général | thème, taille du texte, horodatage, micro, zone de notification, démarrage avec Windows, retour aux réglages par défaut (le vocabulaire est conservé) |
-| Transcription | langue parlée, plusieurs langues dans le même audio, **traduction en anglais**, contexte (sujet, noms, style), vocabulaire, qualité de recherche (*beam size*), utilisation du texte précédent, **transcription des fichiers par lots** (3 à 4× plus rapide sur GPU) |
-| Silences | filtre des silences (VAD) avec sa sensibilité et la pause minimale, suppression du texte inventé pendant les longs silences, seuil « pas de parole », pénalité de répétition |
-| Dictée | raccourci, mode Maintenir / Basculer, coller ou copier, espace après le texte, commandes vocales, signal sonore |
-| Mode Direct | intervalle entre passes, silence de fin de phrase |
-| Exports | format de Ctrl+S, caractères par ligne et lignes par sous-titre |
-| Modèles | modèle utilisé, modèles téléchargés (taille, suppression), dossier des modèles, mode hors ligne strict |
-| Matériel | **calcul sur la carte graphique ou le processeur**, précision (float16, int8_float16, int8…), threads du processeur, état de la carte et installation de l'accélération |
-
-Le passage du GPU au processeur (et inversement), la précision, les threads et le dossier des modèles s'appliquent sans redémarrer : le modèle est rechargé après la transcription en cours. Les modèles disponibles :
-
-| Modèle | Taille | Usage |
-|---|---|---|
-| Léger (small) | 0,5 Go | ordinateurs sans carte graphique |
-| Turbo (large-v3-turbo) | 1,6 Go | le meilleur compromis (par défaut) |
-| Précis (large-v3) | 3,1 Go | la meilleure précision ; le seul à bien traduire vers l'anglais |
-
-## Dictée universelle
-
-MyWhisper reste dans la zone de notification avec le modèle chargé. Depuis n'importe quelle application :
-
-- **Maintenir** (par défaut) : gardez **Ctrl+Maj+Espace** enfoncé pendant que vous parlez, relâchez pour insérer le texte ;
-- **Basculer** : un appui pour démarrer, un second pour arrêter ;
-- **Échap** annule la dictée en cours.
-
-Une pastille en bas de l'écran montre le niveau du micro puis l'état de la transcription. Elle ne prend jamais le focus. Le texte est collé dans la fenêtre active (presse-papiers puis Ctrl+V, l'ancien contenu du presse-papiers est restauré), ou seulement copié si vous choisissez « Copier seulement ».
-
-La section **Dictée** des réglages permet de changer le raccourci (avec Ctrl, Alt, Maj ou Win, ou une touche F seule), le mode, la sortie, le signal sonore, le maintien dans la zone de notification et le démarrage avec Windows. Fermer la fenêtre la réduit dans la zone de notification ; **Quitter** se trouve dans le menu de l'icône.
-
-Limites :
-
-- Windows bloque la saisie simulée vers une fenêtre lancée **en administrateur**. Utilisez alors « Copier seulement », puis Ctrl+V.
-- La dictée attend qu'une transcription ou un mode Direct en cours dans la fenêtre principale soit terminé.
-
-## Vocabulaire
-
-**Réglages → Vocabulaire…** :
-
-- **Mots à favoriser** : noms propres, sigles, jargon. Ils sont transmis au décodeur (`hotwords` de faster-whisper) pour toutes les transcriptions.
-- **Remplacements** : « Entendu → Écrire », sur des mots entiers, sans tenir compte de la casse. Un motif entre barres obliques (`/(\d+) pour ?cent/` → ` %`) est une expression régulière.
-- **Commandes vocales**, dans la dictée universelle : « virgule », « point final », « point d'interrogation », « point d'exclamation », « point-virgule », « deux-points », « points de suspension », « à la ligne », « nouveau paragraphe », « ouvrez / fermez les guillemets », « ouvrez / fermez la parenthèse ». En anglais : *comma, full stop, question mark, new line, new paragraph, open / close quote*… Le mot « point » seul n'est jamais interprété, il est trop courant.
-
-## Exports
-
-| Format | Contenu |
-|---|---|
-| TXT | un segment par ligne |
-| SRT, WebVTT | sous-titres de 2 lignes de 42 caractères au plus, coupés de préférence après la ponctuation, minutés au mot |
-| Markdown | un paragraphe par segment, précédé de son horodatage |
-| Word (.docx) | un paragraphe par segment |
-| JSON | segments et mots avec leurs horodatages |
-
-## Mode Direct
-
-Le bouton **◉ Direct** transcrit en continu, sans attendre la fin d'un enregistrement :
-
-- le texte **gris italique** est provisoire : c'est l'hypothèse en cours, qui peut encore changer ;
-- le texte **noir** est validé : il ne bouge plus.
-
-À l'arrêt, le texte est regroupé en phrases. La copie et les exports fonctionnent comme pour un enregistrement.
-
-Whisper ne sait pas traiter un flux audio en continu. MyWhisper re-transcrit donc chaque seconde une fenêtre glissante d'audio, en suivant la méthode LocalAgreement de [whisper_streaming](https://github.com/ufal/whisper_streaming), implémentée dans `core/live.py` :
-
-- un mot est validé quand **deux passes successives** s'accordent dessus et qu'il ne se termine pas au bord de la fenêtre. C'est là que Whisper a tendance à « deviner » la suite de la phrase ;
-- les mots déjà validés sont reconnus dans les passes suivantes grâce à leurs timestamps, puis ignorés ;
-- l'audio n'est coupé qu'à des endroits sûrs : dans une pause détectée par Silero VAD, ou à une frontière de segment déjà validée si vous parlez plus de 15 s sans pause ;
-- aucune passe n'est lancée pendant les silences, ce qui évite les hallucinations.
-
-Durée des passes mesurée sur RX 7800 XT (simulation sur un enregistrement de 42 s) et latences qui en découlent :
-
-| Modèle | Passe moyenne (mesurée) | Texte provisoire (estimé) | Texte validé (estimé) |
-|---|---|---|---|
-| turbo (recommandé) | ~0,4 s | ~1 à 1,5 s après la parole | ~2 s, ou dès une pause |
-| large-v3 | ~0,9 s | ~2 s | ~3 s |
-
-## Construire l'installeur
+To run the tests:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scriptsuild_installer.ps1
+.\.venv\Scripts\python.exe -m pytest
 ```
 
-Prérequis : le `.venv` de développement et [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`). Le script :
+</details>
 
-1. embarque la wheel CTranslate2 de PyPI (CPU + CUDA), vérifiée par son empreinte ;
-2. construit l'application avec PyInstaller en mode dossier, sans console ni UPX ;
-3. vérifie que l'exécutable charge son moteur (`MyWhisper.exe --probe`) ;
-4. compile `dist\MyWhisper-Setup-<version>.exe` avec Inno Setup (~90 Mo).
+## Keyboard shortcuts
 
-Pour signer l'installeur, passez `-CertFile cert.pfx` (mot de passe dans `MYWHISPER_SIGN_PASSWORD`) ou `-CertThumbprint <empreinte>`. Le script utilise alors `signtool` du Windows SDK.
-
-Options de l'exécutable :
-
-| Option | Rôle |
+| Shortcut | Action |
 |---|---|
-| `--setup-runtime` | détecte la carte et installe son accélération (lancée par l'installeur) |
-| `--probe fichier.json` | écrit ce que voit CTranslate2 (nombre de GPU, types de calcul) |
-| `--minimized` | démarre dans la zone de notification (démarrage avec Windows) |
+| Ctrl + Shift + Space | Dictate into any app (you can change it) |
+| Ctrl + R | Start / stop recording |
+| Ctrl + L | Start / stop live mode |
+| Ctrl + O | Open an audio or video file |
+| Ctrl + S | Export the transcript |
 
-L'accélération est installée dans `%LOCALAPPDATA%\MyWhisper
-untime` (variable `MYWHISPER_RUNTIME_DIR` pour un autre emplacement). Le journal de l'application packagée se trouve dans `%LOCALAPPDATA%\MyWhisper\logs`.
+## Documentation
 
-## Diagnostic
+The full guide (in French) covers every setting, the export formats, how live mode works, troubleshooting and the architecture: [docs/GUIDE.fr.md](docs/GUIDE.fr.md).
 
-```powershell
-.\.venv\Scripts\python.exe scripts\check_gpu.py
-```
+> The interface is currently in French.
 
-Ce script affiche la version de CTranslate2, la présence du runtime ROCm et le nombre de GPU HIP, puis charge le modèle `tiny` en float16 sur le GPU.
+## License
 
-- **`GPU HIP : 0`** : vérifiez le pilote Adrenalin. Vérifiez aussi que `pip show ctranslate2` pointe vers la wheel ROCm, sinon relancez le script d'installation.
-- **La pastille en bas à droite indique « Processeur · int8 »** : le GPU n'a pas pu être initialisé. Le bandeau en donne la raison, et les détails se trouvent dans la console (ou dans le journal de l'application packagée).
+MyWhisper is free software, released under the [GNU General Public License v3.0](LICENSE) or later. You can use, study, modify and share it. If you distribute a modified version, it must stay open source under the same license, so anyone can check what it does with their voice.
 
-## Architecture
+## Acknowledgements
 
-```
-src/mywhisper/
-  app.py              bootstrap : détection GPU (avant Qt), moteur, fenêtre
-  config.py           réglages JSON (%APPDATA%\MyWhisper\settings.json)
-  gpu/rocm_env.py     choix du device : GPU ROCm (float16) ou CPU (int8)
-  core/
-    types.py          Segment, ModelSpec, TranscribeOptions, DeviceConfig…
-    models.py         registre des modèles (turbo / precise)
-    engine.py         Protocol TranscriptionEngine + FasterWhisperEngine
-    live.py           mode Direct : fenêtre glissante + accord LocalAgreement
-    textproc.py       remplacements et commandes vocales (fonctions pures)
-    model_download.py modèle téléchargé au premier lancement, avec progression
-  audio/recorder.py   capture micro 16 kHz mono (sounddevice)
-  runtime/
-    gpu_detect.py     détection de la carte (WMI) : NVIDIA, AMD compatible ou processeur
-    packages.py       accélérations épinglées (URL, version, SHA-256)
-    install.py        téléchargement avec reprise et décompression des wheels
-    store.py          emplacement et activation (sys.path, DLL) avant l'import de ctranslate2
-    startup.py        choix au démarrage, test du GPU (--probe), explication du repli processeur
-  download.py         téléchargements HTTP : progression, reprise, annulation, SHA-256
-  options.py          TranscribeOptions construites depuis les réglages (fichier, Direct, dictée)
-  dictation/
-    controller.py     dictée universelle : machine à états raccourci → micro → texte
-    hotkey.py         raccourci global (hook clavier WH_KEYBOARD_LL)
-    inject.py         collage dans la fenêtre active (SendInput), presse-papiers restauré
-    autostart.py      démarrage avec Windows (clé Run de HKCU)
-    sounds.py         signaux sonores synthétisés
-  export/             exporteurs enregistrés par extension (txt, srt, vtt, md, docx, json)
-    subtitles.py      découpage des sous-titres (2 × 42 caractères)
-  ui/
-    workers.py        ModelWorker : thread unique propriétaire du modèle
-    main_window.py    fenêtre : composition et enchaînement des états
-    tray.py           icône de la zone de notification
-    settings_dialog.py  fenêtre de réglages complète, par sections
-    vocabulary_dialog.py  mots à favoriser, remplacements, commandes vocales
-    theme.py          tokens de couleurs (sombre / clair), QSS généré, polices Geist
-    widgets/          bouton micro, onde, contrôle segmenté, carte transcript,
-                      popover de réglages, notifications, pastille de dictée
-    resources/fonts/  Geist et Geist Mono (licence OFL)
-scripts/              install_rocm.ps1, check_gpu.py, download_models.py,
-                      snapshot_ui.py (captures de l'interface dans chaque état),
-                      build_installer.ps1, make_build_assets.py (icône, version)
-packaging/            PyInstaller : mywhisper.spec, launcher.py
-installer/            Inno Setup : mywhisper.iss
-tests/                tests unitaires + test GPU de bout en bout (-m gpu)
-```
-
-Principes :
-
-- **L'interface ne dépend que du Protocol `TranscriptionEngine`.** Un autre backend (whisper.cpp Vulkan, transformers…) s'ajoute dans `core/` sans toucher l'UI.
-- **Un seul thread (`ModelWorker`) possède le modèle.** Les demandes (chargement, transcription) passent par des signaux Qt en file d'attente : pas d'accès concurrent au GPU, et l'UI ne gèle jamais.
-- **Les segments sont émis un par un** depuis le générateur de faster-whisper. C'est ce qui produit l'affichage progressif et permet d'annuler entre deux segments.
-- **Ajouter un modèle** revient à ajouter une entrée `ModelSpec` dans `core/models.py`. **Ajouter un format d'export** revient à créer une classe avec `suffix`, `label` et `render()`, puis à appeler `register()`.
-
-Le mode Direct et la dictée universelle passent eux aussi par `ModelWorker` : le GPU garde un seul utilisateur. La dictée a ses propres signaux (`dictation_finished`), pour que son texte n'apparaisse pas dans la fenêtre principale.
-
-Prochaines évolutions : voir [docs/ROADMAP.md](docs/ROADMAP.md).
-
-## Tests
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest           # tests unitaires
-.\.venv\Scripts\python.exe -m pytest -m gpu    # transcription réelle sur le GPU (synthèse vocale Windows)
-```
+[OpenAI Whisper](https://github.com/openai/whisper) · [faster-whisper](https://github.com/SYSTRAN/faster-whisper) · [CTranslate2](https://github.com/OpenNMT/CTranslate2) · [whisper_streaming](https://github.com/ufal/whisper_streaming) · [PySide6](https://doc.qt.io/qtforpython-6/) · [Geist](https://github.com/vercel/geist-font)

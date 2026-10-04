@@ -169,7 +169,7 @@ Durée des passes mesurée sur RX 7800 XT (simulation sur un enregistrement de 4
 ## Construire l'installeur
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scriptsbuild_installer.ps1
+powershell -ExecutionPolicy Bypass -File scripts\build_installer.ps1
 ```
 
 Prérequis : le `.venv` de développement et [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`). Le script :
@@ -189,7 +189,7 @@ Options de l'exécutable :
 | `--probe fichier.json` | écrit ce que voit CTranslate2 (nombre de GPU, types de calcul) |
 | `--minimized` | démarre dans la zone de notification (démarrage avec Windows) |
 
-L'accélération est installée dans `%LOCALAPPDATA%\MyWhisperuntime` (variable `MYWHISPER_RUNTIME_DIR` pour un autre emplacement). Le journal de l'application packagée se trouve dans `%LOCALAPPDATA%\MyWhisper\logs`.
+L'accélération est installée dans `%LOCALAPPDATA%\MyWhisper\runtime` (variable `MYWHISPER_RUNTIME_DIR` pour un autre emplacement). Le journal de l'application packagée se trouve dans `%LOCALAPPDATA%\MyWhisper\logs`.
 
 ## Diagnostic
 

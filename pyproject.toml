@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,8 @@ name = "mywhisper"
 dynamic = ["version"]
 description = "Transcription vocale locale (faster-whisper + ROCm) pour Windows"
 readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
     # ctranslate2 (pulled in by faster-whisper) must be the ROCm wheel:
