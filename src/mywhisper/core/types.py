@@ -17,6 +17,7 @@ class Word:
     start: float
     end: float
     text: str  # as produced by Whisper, usually with a leading space
+    probability: float | None = None  # confidence, 0 to 1 (files only)
 
 
 @dataclass(frozen=True)

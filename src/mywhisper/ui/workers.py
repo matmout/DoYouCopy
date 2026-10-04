@@ -10,9 +10,22 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot
 from mywhisper.core.engine import TranscriptionEngine
 from mywhisper.core.live import LiveTranscriber
 from mywhisper.core.models import get_model
-from mywhisper.core.types import TranscribeOptions
+from mywhisper.core.types import SAMPLE_RATE, Segment, TranscribeOptions, Word
 
 log = logging.getLogger(__name__)
+
+
+def load_clip(path: str, start: float, end: float):
+    """16 kHz mono samples of [start, end] seconds of an audio or video file."""
+    from faster_whisper.audio import decode_audio
+
+    audio = decode_audio(path, sampling_rate=SAMPLE_RATE)
+    return audio[int(start * SAMPLE_RATE) : int(end * SAMPLE_RATE)]
+
+
+def shift_segment(segment: Segment, offset: float) -> Segment:
+    words = tuple(Word(w.start + offset, w.end + offset, w.text, w.probability) for w in segment.words)
+    return Segment(segment.start + offset, segment.end + offset, segment.text, words)
 
 
 class ModelWorker(QObject):
@@ -27,6 +40,7 @@ class ModelWorker(QObject):
     request_live = Signal(object, object)  # source with drain(), TranscribeOptions
     request_dictate = Signal(object, object, int)  # audio, TranscribeOptions, job id
     request_reconfigure = Signal(object, str)  # engine.configure() kwargs, model key to reload
+    request_retranscribe = Signal(object, float, float, object, str, int)  # path, start, end, options, key, job
 
     model_loading = Signal(str)  # model label
     model_downloading = Signal(str, int, int)  # model name, done bytes, total bytes
@@ -40,6 +54,9 @@ class ModelWorker(QObject):
     # universal dictation: the whole text at once, kept away from the main window
     dictation_finished = Signal(int, str, str)  # job id, text, language
     dictation_failed = Signal(int, str)  # job id, message
+    # re-transcription of a passage: segments with times in the whole audio
+    retranscribed = Signal(int, object)  # job id, list[Segment]
+    retranscribe_failed = Signal(int, str)  # job id, message
 
     LIVE_POLL_S = 0.05
 
@@ -47,10 +64,12 @@ class ModelWorker(QObject):
         self,
         engine: TranscriptionEngine,
         live_factory: Callable[..., LiveTranscriber] = LiveTranscriber,
+        clip_loader: Callable[[str, float, float], object] = load_clip,
     ) -> None:
         super().__init__()
         self._engine = engine
         self._live_factory = live_factory
+        self._clip_loader = clip_loader
         self._cancel = threading.Event()
         self._live_stop = threading.Event()
         self._last_download_emit = 0.0
@@ -64,6 +83,7 @@ class ModelWorker(QObject):
         self.request_live.connect(self._live)
         self.request_dictate.connect(self._dictate)
         self.request_reconfigure.connect(self._reconfigure)
+        self.request_retranscribe.connect(self._retranscribe)
         self.live_config = None  # LiveConfig for the next live session (None: defaults)
         self._thread.start()
 
@@ -81,6 +101,11 @@ class ModelWorker(QObject):
     def dictate(self, audio, options: TranscribeOptions, job: int) -> None:
         """Queues a dictation; the answer is dictation_finished / dictation_failed."""
         self.request_dictate.emit(audio, options, job)
+
+    def retranscribe(self, path, start: float, end: float, options: TranscribeOptions, key: str, job: int) -> None:
+        """Queues the transcription of [start, end] of an audio file with model key; the
+        current model is loaded back afterwards. Answer: retranscribed / retranscribe_failed."""
+        self.request_retranscribe.emit(path, start, end, options, key, job)
 
     def stop_live(self) -> None:
         """Thread-safe: ends the live session after a final pass."""
@@ -173,6 +198,25 @@ class ModelWorker(QObject):
             log.exception("Live transcription failed")
             self.error.emit(f"Échec de la transcription en direct : {exc}")
         self.live_finished.emit()
+
+    @Slot(object, float, float, object, str, int)
+    def _retranscribe(self, path, start: float, end: float, options: TranscribeOptions, key: str, job: int) -> None:
+        previous = self._engine.model
+        try:
+            clip = self._clip_loader(str(path), start, end)
+            self._load(key)
+            if self._engine.model != get_model(key):
+                raise RuntimeError(f"modèle {get_model(key).model_name} indisponible")
+            _, segments = self._engine.transcribe(clip, options)
+            result = [shift_segment(s, start) for s in segments]
+        except Exception as exc:
+            log.exception("Re-transcription failed")
+            self.retranscribe_failed.emit(job, f"Échec de la retranscription : {exc}")
+            result = None
+        if previous is not None and self._engine.model != previous:
+            self._load(previous.key)
+        if result is not None:
+            self.retranscribed.emit(job, result)
 
     @Slot(object, object, int)
     def _dictate(self, audio, options: TranscribeOptions, job: int) -> None:

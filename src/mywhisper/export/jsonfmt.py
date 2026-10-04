@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 
-from mywhisper.core.types import Segment
+from mywhisper.core.types import Segment, Word
 from mywhisper.export.base import register
 
 
@@ -18,16 +18,20 @@ class JsonExporter:
                     "start": round(s.start, 3),
                     "end": round(s.end, 3),
                     "text": s.text,
-                    "words": [
-                        {"start": round(w.start, 3), "end": round(w.end, 3), "text": w.text.strip()}
-                        for w in s.words
-                    ],
+                    "words": [_word(w) for w in s.words],
                 }
                 for s in segments
                 if s.text
             ]
         }
         return json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+
+
+def _word(w: Word) -> dict:
+    data = {"start": round(w.start, 3), "end": round(w.end, 3), "text": w.text.strip()}
+    if w.probability is not None:
+        data["probability"] = round(w.probability, 3)
+    return data
 
 
 register(JsonExporter())

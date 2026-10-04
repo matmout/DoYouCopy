@@ -156,7 +156,7 @@ class FasterWhisperEngine:
                 s.start,
                 s.end,
                 s.text.strip(),
-                tuple(Word(w.start, w.end, w.word) for w in s.words or ()),
+                tuple(Word(w.start, w.end, w.word, w.probability) for w in s.words or ()),
             )
             for s in segments
         )

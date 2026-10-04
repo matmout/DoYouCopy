@@ -12,6 +12,7 @@ import logging
 import sqlite3
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -102,7 +103,8 @@ def segments_to_json(segments: list[Segment]) -> str:
 
 
 def _word_to_list(w: Word) -> list:
-    return [round(w.start, 3), round(w.end, 3), w.text]
+    values = [round(w.start, 3), round(w.end, 3), w.text]
+    return values if w.probability is None else [*values, round(w.probability, 3)]
 
 
 def segments_from_json(text: str) -> list[Segment]:
@@ -114,7 +116,7 @@ def segments_from_json(text: str) -> list[Segment]:
 
 
 def _word_from_list(values: list) -> Word:
-    return Word(values[0], values[1], values[2])
+    return Word(*values[:4])
 
 
 def fts_query(text: str) -> str:
@@ -185,17 +187,27 @@ class HistoryStore:
         )
         self.db.commit()
 
-    def attach_audio(self, entry_id: int, samples: np.ndarray, wait: bool = False) -> Path:
-        """Keeps the capture's audio; encoded on a background thread unless wait."""
+    def attach_audio(
+        self,
+        entry_id: int,
+        samples: np.ndarray,
+        wait: bool = False,
+        on_written: Callable[[int, Path], None] | None = None,
+    ) -> Path:
+        """Keeps the capture's audio; encoded on a background thread unless wait.
+        on_written(entry_id, path) is called from that thread once the file is complete."""
         target = self.audio_dir / f"{entry_id}.flac"
         self.db.execute("UPDATE sessions SET audio_path=? WHERE id=?", (str(target), entry_id))
         self.db.commit()
 
         def write() -> None:
             try:
-                write_audio(target, samples)
+                written = write_audio(target, samples)
             except Exception:
                 log.exception("Could not keep the audio of session %s", entry_id)
+                return
+            if on_written is not None:
+                on_written(entry_id, written)
 
         if wait:
             write()

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import bisect
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from PySide6.QtCore import QEasingCurve, QRectF, Qt, QVariantAnimation, Signal
-from PySide6.QtGui import QLinearGradient, QPainter, QTextBlockFormat, QTextCharFormat, QTextCursor
+from PySide6.QtGui import QKeySequence, QLinearGradient, QPainter, QTextBlockFormat, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -30,20 +32,93 @@ LISTENING_RECORD = ("À l'écoute", "Cliquez à nouveau sur le bouton pour arrê
 LISTENING_LIVE = ("À l'écoute", "Le texte apparaîtra dès les premiers mots.")
 READING_CHARS = 72
 LINE_HEIGHT = 155  # percent
+LOW_CONFIDENCE = 0.5  # words below are underlined: probable errors
+LINE_SEPARATOR = "\u2028"  # a line break inside a block: one block per segment, always
+
+
+@dataclass(frozen=True)
+class _Span:
+    """Where a timed word (or a whole segment without words) sits in the document."""
+
+    start: float
+    end: float
+    first: int  # document positions
+    last: int
 
 
 class _ReadingEdit(QTextEdit):
-    """Read-only text centred in a column of ~72 characters, the comfortable reading width."""
+    """Text centred in a column of ~72 characters, the comfortable reading width.
+
+    Read-only, except in edit mode where each block stays one segment: no new line,
+    no merge of two lines.
+    """
+
+    clicked = Signal(int)  # document position of a plain click (no selection)
 
     def __init__(self) -> None:
         super().__init__()
-        self.setReadOnly(True)
         self.setAcceptRichText(False)
         self.setFont(theme.ui_font(12))
         self.setFrameShape(QFrame.Shape.NoFrame)
-        self.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse | Qt.TextInteractionFlag.TextSelectableByKeyboard
-        )
+        self.set_editable(False)
+        self._press = None
+
+    def set_editable(self, editable: bool) -> None:
+        self.setReadOnly(not editable)
+        if editable:
+            self.setTextInteractionFlags(Qt.TextInteractionFlag.TextEditorInteraction)
+        else:
+            self.setTextInteractionFlags(
+                Qt.TextInteractionFlag.TextSelectableByMouse | Qt.TextInteractionFlag.TextSelectableByKeyboard
+            )
+
+    def mousePressEvent(self, event) -> None:
+        self._press = event.position().toPoint()
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:
+        super().mouseReleaseEvent(event)
+        point = event.position().toPoint()
+        if (
+            self.isReadOnly()
+            and event.button() == Qt.MouseButton.LeftButton
+            and self._press is not None
+            and (point - self._press).manhattanLength() < 4
+            and not self.textCursor().hasSelection()
+        ):
+            self.clicked.emit(self.cursorForPosition(point).position())
+        self._press = None
+
+    def keyPressEvent(self, event) -> None:
+        if not self.isReadOnly() and self._breaks_segments(event):
+            return
+        super().keyPressEvent(event)
+
+    def _breaks_segments(self, event) -> bool:
+        cursor = self.textCursor()
+        key = event.key()
+        if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            return True
+        if cursor.hasSelection():
+            first = self.document().findBlock(cursor.selectionStart())
+            last = self.document().findBlock(cursor.selectionEnd())
+            edits = bool(event.text()) or key in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete) or event.matches(
+                QKeySequence.StandardKey.Cut
+            ) or event.matches(QKeySequence.StandardKey.Paste)
+            return first != last and edits
+        if key == Qt.Key.Key_Backspace:
+            return cursor.atBlockStart()
+        if key == Qt.Key.Key_Delete:
+            return cursor.atBlockEnd()
+        return False
+
+    def insertFromMimeData(self, source) -> None:
+        cursor = self.textCursor()
+        if cursor.hasSelection() and (
+            self.document().findBlock(cursor.selectionStart()) != self.document().findBlock(cursor.selectionEnd())
+        ):
+            return
+        cursor.insertText(" ".join(source.text().split()))
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
@@ -184,6 +259,7 @@ class TranscriptView(QFrame):
     """The transcript card: empty, loading and error states, final and live rendering."""
 
     retry_requested = Signal()
+    word_clicked = Signal(float)  # seconds: a click on a timed word
 
     def __init__(self, tokens: Tokens, parent=None) -> None:
         super().__init__(parent)
@@ -205,6 +281,7 @@ class TranscriptView(QFrame):
         self.empty = _Empty(tokens)
         self.skeleton = _Skeleton(tokens)
         self.editor = _ReadingEdit()
+        self.editor.clicked.connect(self._on_click)
         self.pages = QStackedWidget()
         for page in (self.empty, self.skeleton, self.editor):
             self.pages.addWidget(page)
@@ -229,6 +306,10 @@ class TranscriptView(QFrame):
         self._fade.valueChanged.connect(self._fade_step)
         self._fade.finished.connect(self._fade_done)
         self._fade_range = (0, 0)
+        self._spans: list[_Span] = []
+        self._span_starts: list[float] = []
+        self._highlighted: _Span | None = None
+        self.editing = False
         self.show_empty()
 
     # ---- states --------------------------------------------------------
@@ -279,32 +360,154 @@ class TranscriptView(QFrame):
         self.editor.clear()
         self._provisional_start = 0
         self._live_last = ""
+        self._spans = []
+        self._span_starts = []
+        self._highlighted = None
+        self.editor.setExtraSelections([])
 
-    def render(self, segments: Sequence[Segment], timestamps: bool) -> None:
+    def render(self, segments: Sequence[Segment], timestamps: bool, scroll: bool = True) -> None:
+        """One block per segment, in order: block n is segment n."""
+        bar = self.editor.verticalScrollBar()
+        position = bar.value()
         self.clear()
         for segment in segments:
-            self.append_segment(segment, timestamps)
+            self.append_segment(segment, timestamps, scroll=False)
         if not segments:
             self.show_empty()
+        if scroll:
+            self._scroll_to_end()
+        else:
+            bar.setValue(position)
 
-    def append_segment(self, segment: Segment, timestamps: bool) -> None:
+    def append_segment(self, segment: Segment, timestamps: bool, scroll: bool = True) -> None:
         self.pages.setCurrentWidget(self.editor)
         cursor = self._end_cursor()
         self._new_line(cursor)
-        if timestamps:
+        if timestamps and not self.editing:
             stamp = QTextCharFormat()
             stamp.setFont(theme.mono_font(10))
             stamp.setForeground(self._t.qcolor("muted"))
             cursor.insertText(f"{clock(segment.start)}   ", stamp)
-        cursor.insertText(segment.text, QTextCharFormat())
+        text_start = cursor.position()
+        cursor.insertText(segment.text.replace("\n", LINE_SEPARATOR), QTextCharFormat())
         self._provisional_start = cursor.position()
-        self._scroll_to_end()
+        self._add_spans(segment, text_start)
+        if scroll:
+            self._scroll_to_end()
+
+    def _add_spans(self, segment: Segment, text_start: int) -> None:
+        """Finds each word in the segment text (replacements may have changed some: those
+        are skipped) and underlines the doubtful ones."""
+        spans, offset = [], 0
+        for word in segment.words:
+            token = word.text.strip()
+            index = segment.text.find(token, offset) if token else -1
+            if index < 0:
+                continue
+            offset = index + len(token)
+            spans.append(_Span(word.start, word.end, text_start + index, text_start + offset))
+            if word.probability is not None and word.probability < LOW_CONFIDENCE and not self.editing:
+                self._underline(text_start + index, text_start + offset)
+        if not spans:
+            spans.append(_Span(segment.start, segment.end, text_start, text_start + len(segment.text)))
+        for span in spans:
+            index = bisect.bisect_right(self._span_starts, span.start)
+            self._span_starts.insert(index, span.start)
+            self._spans.insert(index, span)
+
+    def _underline(self, first: int, last: int) -> None:
+        fmt = QTextCharFormat()
+        fmt.setUnderlineStyle(QTextCharFormat.UnderlineStyle.WaveUnderline)
+        fmt.setUnderlineColor(self._t.qcolor("accent", 0.7))
+        fmt.setToolTip("Mot incertain : à vérifier")
+        cursor = QTextCursor(self.editor.document())
+        cursor.setPosition(first)
+        cursor.setPosition(last, QTextCursor.MoveMode.KeepAnchor)
+        cursor.mergeCharFormat(fmt)
+
+    # ---- audio synchronisation -------------------------------------------
+
+    def span_at_time(self, seconds: float) -> _Span | None:
+        index = bisect.bisect_right(self._span_starts, seconds) - 1
+        if index < 0:
+            return None
+        span = self._spans[index]
+        return span if seconds < span.end + 0.3 else None  # keeps the word lit through short gaps
+
+    def highlight_time(self, seconds: float) -> None:
+        """Lights the word spoken at this instant and keeps it in view."""
+        if self.editing:
+            return
+        span = self.span_at_time(seconds)
+        if span == self._highlighted:
+            return
+        self._highlighted = span
+        if span is None:
+            self.editor.setExtraSelections([])
+            return
+        selection = QTextEdit.ExtraSelection()
+        selection.format.setBackground(self._t.qcolor("accent", 0.25))
+        cursor = QTextCursor(self.editor.document())
+        cursor.setPosition(span.first)
+        cursor.setPosition(span.last, QTextCursor.MoveMode.KeepAnchor)
+        selection.cursor = cursor
+        self.editor.setExtraSelections([selection])
+        rect = self.editor.cursorRect(cursor)
+        viewport = self.editor.viewport().rect()
+        if not viewport.adjusted(0, 40, 0, -40).contains(rect):
+            bar = self.editor.verticalScrollBar()
+            bar.setValue(bar.value() + rect.center().y() - viewport.height() // 3)
+
+    def clear_highlight(self) -> None:
+        self._highlighted = None
+        self.editor.setExtraSelections([])
+
+    def _on_click(self, position: int) -> None:
+        for span in self._spans:
+            if span.first <= position <= span.last:
+                self.word_clicked.emit(span.start)
+                return
+
+    # ---- correction ----------------------------------------------------
+
+    def start_editing(self, segments: Sequence[Segment]) -> None:
+        """Edit mode: plain text, one line per segment, timestamps and underlines hidden."""
+        self.editing = True
+        self.clear_highlight()
+        self.render(segments, timestamps=False, scroll=False)
+        self.editor.set_editable(True)
+        self.editor.setFocus()
+
+    def stop_editing(self) -> list[str]:
+        """Leaves edit mode and returns the text of each segment; the caller renders again."""
+        texts = self.edited_texts()
+        self.editing = False
+        self.editor.set_editable(False)
+        return texts
+
+    def edited_texts(self) -> list[str]:
+        document = self.editor.document()
+        return [
+            document.findBlockByNumber(n).text().replace(LINE_SEPARATOR, "\n")
+            for n in range(document.blockCount())
+        ]
+
+    def selected_segments(self) -> tuple[int, int] | None:
+        """Block numbers (= segment indexes) covered by the selection, or under the cursor."""
+        if self.pages.currentWidget() is not self.editor or not self._spans:
+            return None
+        cursor = self.editor.textCursor()
+        document = self.editor.document()
+        first = document.findBlock(cursor.selectionStart()).blockNumber()
+        last = document.findBlock(cursor.selectionEnd()).blockNumber()
+        return first, last
 
     # ---- live rendering ------------------------------------------------
 
     def live_update(self, committed: Sequence[Segment], provisional: str) -> None:
         """Appends committed words and replaces the provisional tail."""
         self._finish_fade()
+        self._spans, self._span_starts = [], []  # live text is not one block per segment
         self.pages.setCurrentWidget(self.editor)
         cursor = self.editor.textCursor()
         cursor.setPosition(self._provisional_start)

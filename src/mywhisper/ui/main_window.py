@@ -37,6 +37,7 @@ from mywhisper.ui.history_panel import HistoryPanel
 from mywhisper.ui.settings_dialog import SettingsDialog
 from mywhisper.ui.vocabulary_dialog import VocabularyDialog
 from mywhisper.ui.widgets.notice_bar import NoticeBar
+from mywhisper.ui.widgets.player_bar import PlayerBar
 from mywhisper.ui.widgets.record_button import RecordButton
 from mywhisper.ui.widgets.segmented import SegmentedControl
 from mywhisper.ui.widgets.settings_popover import SettingsPopover
@@ -83,6 +84,7 @@ class MainWindow(QMainWindow):
     theme_tokens_changed = Signal(object)  # theme.Tokens
     install_runtime_requested = Signal()
     session_finished = Signal(object)  # SessionResult, for the history
+    audio_kept = Signal(int, object)  # history id, Path: a capture's audio is on disk
 
     def __init__(
         self,
@@ -214,6 +216,12 @@ class MainWindow(QMainWindow):
         card_row.setSpacing(10)
         card_row.addWidget(self.notice)
         card_row.addWidget(self.transcript, 1)
+        self.player = PlayerBar(t)
+        self.player.position_changed.connect(self.transcript.highlight_time)
+        self.transcript.word_clicked.connect(lambda seconds: self.player.seek(seconds, play=True))
+        self.transcript.editor.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.transcript.editor.customContextMenuRequested.connect(self._transcript_menu)
+        card_row.addWidget(self.player)
 
         # bottom bar: actions, status, device
         self.copy_button = QToolButton()
@@ -236,6 +244,10 @@ class MainWindow(QMainWindow):
         self.export_button.setMenu(menu)
         self.clear_button = QPushButton("Effacer")
         self.clear_button.clicked.connect(self._clear)
+        self.edit_button = QPushButton("Modifier")
+        self.edit_button.setCheckable(True)
+        self.edit_button.setToolTip("Corriger le texte, les horodatages sont conservés (Ctrl+E)")
+        self.edit_button.toggled.connect(self._set_editing)
         self.cancel_button = QPushButton("Annuler")
         self.cancel_button.setObjectName("OutlineButton")
         self.cancel_button.clicked.connect(lambda: self.session.cancel())
@@ -255,7 +267,7 @@ class MainWindow(QMainWindow):
         row = QHBoxLayout(bottom)
         row.setContentsMargins(16, 0, 16, 0)
         row.setSpacing(4)
-        for widget in (self.copy_button, self.export_button, self.clear_button):
+        for widget in (self.copy_button, self.export_button, self.edit_button, self.clear_button):
             row.addWidget(widget)
         row.addSpacing(8)
         row.addWidget(self.cancel_button)
@@ -324,6 +336,9 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+L"), self, lambda: self._shortcut_capture("live"))
         QShortcut(QKeySequence.StandardKey.Open, self, self._open_file)
         QShortcut(QKeySequence("Ctrl+H"), self, self.history_button.toggle)
+        QShortcut(QKeySequence("Ctrl+E"), self, lambda: self.edit_button.isEnabled() and self.edit_button.toggle())
+        QShortcut(QKeySequence("Ctrl+Space"), self, self.player.toggle)
+        QShortcut(QKeySequence("Ctrl+Left"), self, self.player.back)
         QShortcut(QKeySequence.StandardKey.Save, self, lambda: self._export(self.settings.default_export))
         self.addAction(QAction(self, shortcut=QKeySequence.StandardKey.Quit, triggered=self.close))
         self._update_controls()
@@ -340,6 +355,8 @@ class MainWindow(QMainWindow):
         s.live_updated.connect(self.transcript.live_update)
         s.finished.connect(self._on_finished)
         s.finished.connect(self._record_history)
+        s.segments_edited.connect(self._on_segments_edited)
+        self.audio_kept.connect(self._on_audio_kept)
         s.model_loading.connect(self._on_model_loading)
         s.model_downloading.connect(self._on_model_downloading)
         s.model_loaded.connect(self._on_model_loaded)
@@ -509,7 +526,7 @@ class MainWindow(QMainWindow):
         self.tokens = theme.resolve(self.settings.theme)
         theme.apply(QApplication.instance(), self.tokens)
         theme.apply_titlebar(self, self.tokens)
-        for widget in (self.record_button, self.waveform, self.transcript, self.notice, self.history_panel):
+        for widget in (self.record_button, self.waveform, self.transcript, self.notice, self.history_panel, self.player):
             if widget is not None:
                 widget.set_tokens(self.tokens)
         self._apply_icons()
@@ -526,6 +543,7 @@ class MainWindow(QMainWindow):
             (self.copy_button, "ph.copy"),
             (self.export_button, "ph.export"),
             (self.clear_button, "ph.trash"),
+            (self.edit_button, "ph.pencil-simple"),
             (self.import_button, "ph.upload-simple"),
         ):
             button.setIcon(theme.icon(name, t))
@@ -543,6 +561,7 @@ class MainWindow(QMainWindow):
         self._toggle_capture()
 
     def _toggle_capture(self) -> None:
+        self._finish_editing()
         session = self.session
         dictating = self.dictation is not None and self.dictation.state != "idle"
         if dictating and session.available:
@@ -574,6 +593,7 @@ class MainWindow(QMainWindow):
                 self.transcript.show_empty(LISTENING_RECORD)
         else:
             self._new_history_entry()
+            self.player.load(None)
             self.transcript.clear()
             self.transcript.show_empty(LISTENING_LIVE)
         self.record_seconds = 0.0
@@ -592,6 +612,7 @@ class MainWindow(QMainWindow):
     # ---- files and transcription ---------------------------------------
 
     def _open_file(self) -> None:
+        self._finish_editing()
         if not self.session.available:
             return
         path, _ = QFileDialog.getOpenFileName(self, "Importer un fichier audio", "", AUDIO_FILTER)
@@ -649,6 +670,8 @@ class MainWindow(QMainWindow):
         self.toast.show_message(f"Exporté vers {target.name}")
 
     def _clear(self) -> None:
+        self._finish_editing(apply=False)
+        self.player.load(None)
         self.history_id = None
         if self.history_panel is not None:
             self.history_panel.select(None)
@@ -657,8 +680,8 @@ class MainWindow(QMainWindow):
         self.transcript.show_empty()
 
     def _rerender(self) -> None:
-        if not self.session.live and self.segments:
-            self.transcript.render(self.segments, self._timestamps())
+        if not self.session.live and self.segments and not self.transcript.editing:
+            self.transcript.render(self.segments, self._timestamps(), scroll=False)
 
     def _timestamps(self) -> bool:
         return self.settings_popover.timestamps_check.isChecked()
@@ -687,6 +710,7 @@ class MainWindow(QMainWindow):
 
     def _on_transcription_started(self) -> None:
         self._new_history_entry()
+        self.player.load(None)
         self.transcript.clear()
         self.transcript.hide_error()
         self.transcript.set_progress(0.0)
@@ -703,6 +727,8 @@ class MainWindow(QMainWindow):
         elif not self.segments:
             self.transcript.show_empty()
         if result is not None:
+            if result.source_path is not None and result.source_path.is_file():
+                self.player.load(result.source_path)
             self.session_finished.emit(result)
 
     # ---- history ---------------------------------------------------------
@@ -748,7 +774,7 @@ class MainWindow(QMainWindow):
         self._save_history(result)
         if self.history_id is not None and result.audio is not None and self.settings.history_keep_audio:
             try:
-                self.history.attach_audio(self.history_id, result.audio)
+                self.history.attach_audio(self.history_id, result.audio, on_written=self.audio_kept.emit)
             except Exception:
                 log.exception("Could not keep the audio")
             self.history_panel.refresh()
@@ -774,7 +800,8 @@ class MainWindow(QMainWindow):
         entry = self.history.get(entry_id)
         if entry is None:
             return
-        if not self.session.open(entry.segments, entry.title):
+        self._finish_editing()
+        if not self.session.open(entry.segments, entry.title, entry.language):
             self.toast.show_message("Terminez d'abord la transcription en cours")
             self.history_panel.select(self.history_id)
             return
@@ -782,10 +809,21 @@ class MainWindow(QMainWindow):
         self.history_panel.select(entry_id)
         self.transcript.hide_error()
         if entry.segments:
-            self.transcript.render(entry.segments, self._timestamps())
+            self.transcript.render(entry.segments, self._timestamps(), scroll=False)
         else:
             self.transcript.show_empty()
+        self.player.load(entry.audio or self._existing(entry.source))
         self._status(f"{entry.title} · {entry.date_label()}", 6000)
+
+    @staticmethod
+    def _existing(path: str) -> Path | None:
+        return Path(path) if path and Path(path).is_file() else None
+
+    def _on_audio_kept(self, entry_id: int, path: Path) -> None:
+        if entry_id == self.history_id and self.player.path is None:
+            self.player.load(path)
+        if self.history_panel is not None:
+            self.history_panel.refresh()
 
     def _history_entry_deleted(self, entry_id: int) -> None:
         if entry_id == self.history_id:
@@ -810,6 +848,76 @@ class MainWindow(QMainWindow):
         self.history_id = None
         self.history_panel.refresh()
         self.toast.show_message("Historique effacé")
+
+    # ---- correction ------------------------------------------------------
+
+    def _set_editing(self, editing: bool) -> None:
+        if editing == self.transcript.editing:
+            return
+        if editing:
+            if not (self.segments and self.idle):
+                self.edit_button.setChecked(False)
+                return
+            self.player.stop()
+            self.transcript.start_editing(self.segments)
+            self._status("Modification : une ligne par segment. Recliquez sur Modifier pour valider.")
+        else:
+            texts = self.transcript.stop_editing()
+            if len(texts) == len(self.segments) and self.session.edit_texts(texts):
+                self._status("Corrections enregistrées.", 4000)  # re-rendered by _on_segments_edited
+            else:
+                self._status("")
+                self._rerender()
+        self._update_controls()
+
+    def _finish_editing(self, apply: bool = True) -> None:
+        if not self.transcript.editing:
+            return
+        if apply:
+            self.edit_button.setChecked(False)
+            return
+        self.transcript.stop_editing()
+        self.edit_button.blockSignals(True)
+        self.edit_button.setChecked(False)
+        self.edit_button.blockSignals(False)
+
+    def _on_segments_edited(self) -> None:
+        if self.history_id is not None and self.history is not None:
+            try:
+                self.history.update_segments(self.history_id, self.segments)
+            except Exception:
+                log.exception("Could not save the corrections")
+        self._rerender()
+
+    def _transcript_menu(self, position) -> None:
+        editor = self.transcript.editor
+        menu = editor.createStandardContextMenu(position)
+        if not self.transcript.editing and self.segments:
+            if not editor.textCursor().hasSelection():
+                editor.setTextCursor(editor.cursorForPosition(position))
+            menu.addSeparator()
+            if self.player.path is not None:
+                cursor_position = editor.cursorForPosition(position).position()
+                menu.addAction("Lire à partir d'ici", lambda: self._play_from(cursor_position))
+            precise = MODELS["precise"].label
+            action = menu.addAction(f"Retranscrire avec le modèle {precise}", self._retranscribe_selection)
+            action.setEnabled(self.player.path is not None and self.session.available)
+            if self.player.path is None:
+                action.setToolTip("L'audio de cette transcription n'est pas disponible.")
+        menu.exec(editor.viewport().mapToGlobal(position))
+
+    def _play_from(self, position: int) -> None:
+        block = self.transcript.editor.document().findBlock(position).blockNumber()
+        if 0 <= block < len(self.segments):
+            self.player.seek(self.segments[block].start, play=True)
+
+    def _retranscribe_selection(self) -> None:
+        selection = self.transcript.selected_segments()
+        if selection is None or self.player.path is None:
+            return
+        self.player.stop()
+        first, last = selection
+        self.session.retranscribe(self.player.path, first, last, "precise")
 
     # ---- diagnostic ------------------------------------------------------
 
@@ -869,7 +977,7 @@ class MainWindow(QMainWindow):
         if capturing:
             self.record_button.setEnabled(not s.live_stopping)  # stays clickable to stop
         else:
-            self.record_button.setEnabled(not s.model_loading_now and not s.busy)
+            self.record_button.setEnabled(not s.model_loading_now and s.idle)
         self.mode_control.setEnabled(s.available)
         self.model_control.setEnabled(s.available)
         self.language_combo.setEnabled(not capturing)
@@ -882,6 +990,7 @@ class MainWindow(QMainWindow):
         self.copy_button.setEnabled(has_text)
         self.export_button.setEnabled(has_text and self.idle)
         self.clear_button.setEnabled(has_text and self.idle)
+        self.edit_button.setEnabled((has_text and self.idle) or self.transcript.editing)
 
     # ---- Qt events ----------------------------------------------------
 
@@ -920,6 +1029,8 @@ class MainWindow(QMainWindow):
             self.save_settings()
             self.hidden_to_tray.emit()
             return
+        self._finish_editing()
+        self.player.stop()
         self.session.shutdown()
         self._autosave()
         if self.history is not None:

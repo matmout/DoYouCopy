@@ -71,6 +71,7 @@ class SessionController(QObject):
     segment_added = Signal(object, object)  # Segment, progress fraction or None
     live_updated = Signal(object, str)  # committed segments, provisional text
     finished = Signal(object)  # SessionResult, or None (cancelled, too short, failed)
+    segments_edited = Signal()  # the current segments changed after the fact (edit, re-transcription)
     model_loading = Signal(str)  # model label
     model_downloading = Signal(str, int, int)  # model name, done bytes, total bytes
     model_loaded = Signal(str, str)  # model key, device description
@@ -93,6 +94,9 @@ class SessionController(QObject):
         self._source_path: Path | None = None
         self._audio: np.ndarray | None = None
         self._tee: _Tee | None = None
+        self.retranscribing = False
+        self._retranscribe_job = 0
+        self._retranscribe_range = (0, 0)
 
         w = worker
         w.model_loading.connect(self._on_model_loading)
@@ -104,12 +108,14 @@ class SessionController(QObject):
         w.live_update.connect(self._on_live_update)
         w.live_finished.connect(self._on_live_finished)
         w.error.connect(self._on_error)
+        w.retranscribed.connect(self._on_retranscribed)
+        w.retranscribe_failed.connect(self._on_retranscribe_failed)
 
     # ---- state ---------------------------------------------------------
 
     @property
     def idle(self) -> bool:
-        return not (self.busy or self.live)
+        return not (self.busy or self.live or self.retranscribing)
 
     @property
     def recording(self) -> bool:
@@ -238,12 +244,13 @@ class SessionController(QObject):
     def cancel(self) -> None:
         self.worker.cancel()
 
-    def open(self, segments: list[Segment], name: str) -> bool:
+    def open(self, segments: list[Segment], name: str, language: str | None = None) -> bool:
         """Shows a past transcription (history) as the current result."""
         if not self.available:
             return False
         self.segments = list(segments)
         self.source_name = name
+        self.language = language
         self.status.emit("", 0)
         self.changed.emit()
         return True
@@ -251,6 +258,61 @@ class SessionController(QObject):
     def clear(self) -> None:
         self.segments = []
         self.status.emit("", 0)
+        self.changed.emit()
+
+    # ---- corrections -------------------------------------------------------
+
+    def edit_texts(self, texts: list[str]) -> bool:
+        """New text of each segment (same count, same order). The times are kept; the word
+        timings of a changed segment are dropped, they no longer match. True if anything changed."""
+        if len(texts) != len(self.segments):
+            raise ValueError("one text per segment")
+        changed = False
+        for i, (segment, text) in enumerate(zip(self.segments, texts)):
+            text = text.strip()
+            if text != segment.text:
+                self.segments[i] = replace(segment, text=text, words=())
+                changed = True
+        if changed:
+            self.segments_edited.emit()
+            self.changed.emit()
+        return changed
+
+    def retranscribe(self, audio_path: Path, first: int, last: int, model_key: str = "precise") -> bool:
+        """Transcribes segments first..last again from the audio, with another model."""
+        if not self.available or not self.segments or not 0 <= first <= last < len(self.segments):
+            return False
+        start = max(0.0, self.segments[first].start - 0.2)
+        end = self.segments[last].end + 0.2
+        self.retranscribing = True
+        self._retranscribe_job += 1
+        self._retranscribe_range = (first, last)
+        options = replace(transcribe_options(self.settings, FILE), language=self.language or self.settings.language)
+        self.worker.retranscribe(audio_path, start, end, options, model_key, self._retranscribe_job)
+        self.status.emit("Retranscription du passage…", 0)
+        self.changed.emit()
+        return True
+
+    def _on_retranscribed(self, job: int, segments: list[Segment]) -> None:
+        if job != self._retranscribe_job or not self.retranscribing:
+            return
+        self.retranscribing = False
+        first, last = self._retranscribe_range
+        segments = [self.apply_vocabulary(s) for s in segments if s.text]
+        if segments:
+            self.segments[first : last + 1] = segments
+            self.status.emit("Passage retranscrit.", 5000)
+            self.segments_edited.emit()
+        else:
+            self.status.emit("Aucune parole retrouvée dans ce passage.", 5000)
+        self.changed.emit()
+
+    def _on_retranscribe_failed(self, job: int, message: str) -> None:
+        if job != self._retranscribe_job:
+            return
+        self.retranscribing = False
+        self.status.emit("", 0)
+        self.error.emit(message, False)
         self.changed.emit()
 
     def apply_vocabulary(self, segment: Segment) -> Segment:
