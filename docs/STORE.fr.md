@@ -30,11 +30,15 @@ powershell -ExecutionPolicy Bypass -File scripts\build_installer.ps1 -SkipInstal
 powershell -ExecutionPolicy Bypass -File scripts\build_msix.ps1
 ```
 
-- `-DevSign` : signe le paquet avec un certificat de test (sujet = Publisher), approuvé
-  pour l'utilisateur courant, pour l'installer avec `Add-AppxPackage` et l'essayer avant
-  la soumission. **Ne pas déposer ce paquet-là** dans Partner Center.
-- `-Wack` : lance le Windows App Certification Kit, les tests que le Store passe à la
-  soumission (terminal administrateur). Le rapport est écrit à côté du paquet.
+- `-DevSign` (terminal administrateur) : signe le paquet avec un certificat de test
+  (sujet = Publisher) et l'approuve pour la machine (*Ordinateur local → Personnes
+  autorisées*, le seul magasin qu'accepte `Add-AppxPackage`), pour l'installer et
+  l'essayer avant la soumission. **Ne pas déposer ce paquet-là** dans Partner Center.
+  Pour retirer ce certificat ensuite : `certlm.msc` → Personnes autorisées →
+  « DoYouCopy (test MSIX) ».
+- `-Wack` (terminal administrateur, implique `-DevSign`) : lance le Windows App
+  Certification Kit, les tests que le Store passe à la soumission. Le rapport est écrit
+  à côté du paquet.
 
 La version du paquet est `doyoucopy.__version__` suivie de `.0` (`1.1.0` → `1.1.0.0`) :
 le Store réserve le 4ᵉ nombre. Chaque soumission doit avoir une version plus grande que

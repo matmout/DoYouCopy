@@ -13,8 +13,10 @@
     Le paquet n'est PAS signé : c'est ce fichier qu'on dépose dans Partner Center, le
     Store le signe lui-même. Pour l'installer sur cette machine avant de le soumettre,
     -DevSign le signe avec un certificat de test (sujet = Publisher du manifeste) et
-    l'approuve pour l'utilisateur courant. -Wack lance ensuite le Windows App
-    Certification Kit, les tests que le Store passe à la soumission (admin requis).
+    l'approuve pour la machine (magasin « Personnes autorisées » de l'ordinateur, le
+    seul qu'accepte Add-AppxPackage) : terminal administrateur requis.
+    -Wack lance ensuite le Windows App Certification Kit, les tests que le Store passe
+    à la soumission ; il installe le paquet pour le tester, donc implique -DevSign.
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File scripts\build_installer.ps1 -SkipInstaller
@@ -26,6 +28,12 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if ($Wack) { $DevSign = $true }
+if ($DevSign) {
+    $Admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+        [Security.Principal.WindowsBuiltInRole]::Administrator)
+    if (-not $Admin) { throw "-DevSign et -Wack demandent un terminal administrateur (clic droit sur PowerShell > Exécuter en tant qu'administrateur)" }
+}
 $Root = Split-Path -Parent $PSScriptRoot
 $Build = Join-Path $Root "build"
 $Dist = Join-Path $Root "dist"
@@ -92,12 +100,14 @@ if ($DevSign) {
             -FriendlyName "DoYouCopy (test MSIX)" -CertStoreLocation Cert:\CurrentUser\My `
             -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
     }
-    # Approved for this user only: Add-AppxPackage then accepts the test signature.
-    $Trusted = Get-ChildItem Cert:\CurrentUser\TrustedPeople | Where-Object { $_.Thumbprint -eq $Cert.Thumbprint }
+    # Add-AppxPackage only accepts a test signature trusted by the machine (the
+    # user's own TrustedPeople store is not enough: error 0x800B0109).
+    $Trusted = Get-ChildItem Cert:\LocalMachine\TrustedPeople | Where-Object { $_.Thumbprint -eq $Cert.Thumbprint }
     if (-not $Trusted) {
         $Cer = Join-Path $Msix "devcert.cer"
         Export-Certificate -Cert $Cert -FilePath $Cer | Out-Null
-        Import-Certificate -FilePath $Cer -CertStoreLocation Cert:\CurrentUser\TrustedPeople | Out-Null
+        Import-Certificate -FilePath $Cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople | Out-Null
+        Write-Host "    Certificat de test approuvé (Ordinateur local > Personnes autorisées, empreinte $($Cert.Thumbprint))"
     }
     $SignTool = Find-SdkTool "signtool.exe"
     Invoke-Checked $SignTool @("sign", "/fd", "SHA256", "/sha1", $Cert.Thumbprint, "/s", "My", $Package)
