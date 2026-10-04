@@ -12,6 +12,12 @@ Dictate into any app or transcribe audio files. Everything runs on your own PC, 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL%20v3-blue)](LICENSE)
 
+### [⬇️ Download MyWhisper for Windows](https://github.com/matmout/Mywhisper/releases/latest)
+
+[![Download for Windows](https://img.shields.io/badge/Download%20for%20Windows-latest%20release-ED1C24?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/matmout/Mywhisper/releases/latest)
+
+<sub>Free · Windows 10 / 11 (64-bit) · no administrator rights needed</sub>
+
 | Live mode, dark theme | Finished transcript, light theme |
 |---|---|
 | ![MyWhisper live mode](docs/apercu-direct-sombre.png) | ![MyWhisper finished transcript](docs/apercu-termine-clair.png) |
@@ -60,7 +66,7 @@ For example, on a Radeon RX 7800 XT, 15 s of speech is transcribed in about 1 se
 
 ## Installation
 
-1. Download `MyWhisper-Setup-<version>.exe` from the [Releases](https://github.com/matmout/Mywhisper/releases) page (Windows 10 / 11, 64-bit).
+1. Download `MyWhisper-Setup-<version>.exe` from the [latest release](https://github.com/matmout/Mywhisper/releases/latest) (Windows 10 / 11, 64-bit).
 2. Run it. **No administrator rights are needed**: it installs into your user profile. You can add a Start menu shortcut (checked by default) and a Desktop shortcut; both can be changed later in **Settings → General → Shortcuts**.
 3. At the end of setup, MyWhisper detects your graphics card and downloads the matching acceleration (~1.2 GB, from official sources, with pinned versions and SHA-256 checks). It then tests the card for real.
 4. On first launch, the Turbo model (~1.6 GB) downloads with a progress bar. After that, no internet connection is needed.
