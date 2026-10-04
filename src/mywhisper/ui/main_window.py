@@ -31,7 +31,9 @@ from mywhisper.export.markdown import MarkdownExporter, timecode
 from mywhisper.gpu import rocm_env
 from mywhisper.runtime import startup
 from mywhisper.session import LIVE_KIND, RECORD, SessionController, SessionResult, clock
+from mywhisper.storage.history import HistoryStore
 from mywhisper.ui import theme
+from mywhisper.ui.history_panel import HistoryPanel
 from mywhisper.ui.settings_dialog import SettingsDialog
 from mywhisper.ui.vocabulary_dialog import VocabularyDialog
 from mywhisper.ui.widgets.notice_bar import NoticeBar
@@ -71,6 +73,8 @@ ENGINE_SETTINGS = {"device", "compute_type", "cpu_threads", "models_dir", "allow
 AUDIO_FILTER = "Audio / vidéo (*.wav *.mp3 *.m4a *.flac *.ogg *.opus *.aac *.wma *.mp4 *.mkv *.webm);;Tous (*)"
 AUDIO_SUFFIXES = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".aac", ".wma", ".mp4", ".mkv", ".webm"}
 LEVEL_INTERVAL_MS = 33
+AUTOSAVE_MS = 30_000  # long sessions are saved as they go: a crash loses 30 s at most
+CAPTURE_TITLES = {"record": "Enregistrement", "live": "Direct"}
 
 
 class MainWindow(QMainWindow):
@@ -80,11 +84,20 @@ class MainWindow(QMainWindow):
     install_runtime_requested = Signal()
     session_finished = Signal(object)  # SessionResult, for the history
 
-    def __init__(self, settings: Settings, worker: ModelWorker, device_description: str) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        worker: ModelWorker,
+        device_description: str,
+        history: HistoryStore | None = None,
+    ) -> None:
         super().__init__()
         self.settings = settings
         self.worker = worker
         self.session = SessionController(settings, worker)
+        self.history = history
+        self.history_id: int | None = None  # history entry of the current result
+        self._autosaved_count = 0
         self.tokens = theme.resolve(settings.theme)
         self.record_seconds = 0.0
         # set by app.py when the tray icon and the universal dictation are available
@@ -106,6 +119,9 @@ class MainWindow(QMainWindow):
 
         self.level_timer = QTimer(self, interval=LEVEL_INTERVAL_MS)
         self.level_timer.timeout.connect(self._update_level)
+        self.autosave_timer = QTimer(self, interval=AUTOSAVE_MS)
+        self.autosave_timer.timeout.connect(self._autosave)
+        self.autosave_timer.start()
         QGuiApplication.styleHints().colorSchemeChanged.connect(lambda _: self._theme_changed())
         self.session.load_model(self.settings.model_key)
 
@@ -131,13 +147,19 @@ class MainWindow(QMainWindow):
         self.settings_button.setObjectName("IconButton")
         self.settings_button.setToolTip("Réglages")
         self.settings_button.clicked.connect(self._open_settings)
+        self.history_button = QToolButton()
+        self.history_button.setObjectName("IconButton")
+        self.history_button.setToolTip("Historique (Ctrl+H)")
+        self.history_button.setCheckable(True)
+        self.history_button.setVisible(self.history is not None)
 
         top = QFrame()
         top.setObjectName("TopBar")
         top.setFixedHeight(56)
         row = QHBoxLayout(top)
-        row.setContentsMargins(20, 0, 12, 0)
+        row.setContentsMargins(12, 0, 12, 0)
         row.setSpacing(10)
+        row.addWidget(self.history_button, alignment=Qt.AlignmentFlag.AlignVCenter)
         row.addWidget(wordmark)
         row.addStretch()
         for widget in (self.model_control, self.language_combo, self.settings_button):
@@ -247,9 +269,26 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(root)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
+        main_column = QVBoxLayout()
+        main_column.setSpacing(0)
+        main_column.addLayout(capture)
+        main_column.addLayout(card_row, 1)
+        body = QHBoxLayout()
+        body.setSpacing(0)
+        self.history_panel: HistoryPanel | None = None
+        if self.history is not None:
+            panel = HistoryPanel(self.history, t)
+            panel.opened.connect(self._open_history_entry)
+            panel.deleted.connect(self._history_entry_deleted)
+            panel.renamed.connect(self._history_entry_renamed)
+            panel.setVisible(self.settings.history_visible)
+            self.history_button.setChecked(self.settings.history_visible)
+            self.history_button.toggled.connect(self._toggle_history)
+            body.addWidget(panel)
+            self.history_panel = panel
+        body.addLayout(main_column, 1)
         layout.addWidget(top)
-        layout.addLayout(capture)
-        layout.addLayout(card_row, 1)
+        layout.addLayout(body, 1)
         layout.addWidget(bottom)
         self.setCentralWidget(root)
 
@@ -283,6 +322,7 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+R"), self, lambda: self._shortcut_capture("record"))
         QShortcut(QKeySequence("Ctrl+L"), self, lambda: self._shortcut_capture("live"))
         QShortcut(QKeySequence.StandardKey.Open, self, self._open_file)
+        QShortcut(QKeySequence("Ctrl+H"), self, self.history_button.toggle)
         QShortcut(QKeySequence.StandardKey.Save, self, lambda: self._export(self.settings.default_export))
         self.addAction(QAction(self, shortcut=QKeySequence.StandardKey.Quit, triggered=self.close))
         self._update_controls()
@@ -298,6 +338,7 @@ class MainWindow(QMainWindow):
         s.segment_added.connect(self._on_segment)
         s.live_updated.connect(self.transcript.live_update)
         s.finished.connect(self._on_finished)
+        s.finished.connect(self._record_history)
         s.model_loading.connect(self._on_model_loading)
         s.model_downloading.connect(self._on_model_downloading)
         s.model_loaded.connect(self._on_model_loaded)
@@ -325,6 +366,7 @@ class MainWindow(QMainWindow):
     def attach_dictation(self, controller, hook) -> None:
         self.dictation = controller
         self.hook = hook
+        controller.dictated.connect(self.record_dictation)
 
     def _hotkey_edited(self, text: str) -> None:
         if not text:
@@ -356,12 +398,14 @@ class MainWindow(QMainWindow):
             device_description=self.device_chip.text(),
             hardware_status=self._hardware_status,
             hook=self.hook,
+            history_dir=self.history.folder if self.history is not None else None,
         )
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         dialog.changed.connect(self._on_setting_changed)
         dialog.vocabulary_requested.connect(self._open_vocabulary)
         dialog.install_runtime_requested.connect(self.install_runtime_requested)
         dialog.reset_requested.connect(self.reset_settings)
+        dialog.history_clear_requested.connect(self.clear_history)
         self.worker.model_loaded.connect(dialog.set_device_description_from_load)
         if page:
             dialog.show_page(page)
@@ -397,6 +441,11 @@ class MainWindow(QMainWindow):
             self._apply_engine_settings()
         elif name == "dictation_hotkey":
             self._apply_hotkey()
+        elif name == "history_visible":
+            self.history_button.setChecked(value)
+        elif name == "history_audio_days" and self.history is not None:
+            self.history.purge_audio(value)
+            self.history_panel.refresh()
         self._sync_popover()
 
     def _apply_engine_settings(self) -> None:
@@ -457,8 +506,9 @@ class MainWindow(QMainWindow):
         self.tokens = theme.resolve(self.settings.theme)
         theme.apply(QApplication.instance(), self.tokens)
         theme.apply_titlebar(self, self.tokens)
-        for widget in (self.record_button, self.waveform, self.transcript, self.notice):
-            widget.set_tokens(self.tokens)
+        for widget in (self.record_button, self.waveform, self.transcript, self.notice, self.history_panel):
+            if widget is not None:
+                widget.set_tokens(self.tokens)
         self._apply_icons()
         self._rerender()
         self.theme_tokens_changed.emit(self.tokens)
@@ -467,6 +517,8 @@ class MainWindow(QMainWindow):
         t = self.tokens
         self.settings_button.setIcon(theme.icon("ph.gear-six", t))
         self.settings_button.setIconSize(QSize(20, 20))
+        self.history_button.setIcon(theme.icon("ph.clock-counter-clockwise", t))
+        self.history_button.setIconSize(QSize(20, 20))
         for button, name in (
             (self.copy_button, "ph.copy"),
             (self.export_button, "ph.export"),
@@ -518,6 +570,7 @@ class MainWindow(QMainWindow):
             if not self.segments:
                 self.transcript.show_empty(LISTENING_RECORD)
         else:
+            self._new_history_entry()
             self.transcript.clear()
             self.transcript.show_empty(LISTENING_LIVE)
         self.record_seconds = 0.0
@@ -593,6 +646,9 @@ class MainWindow(QMainWindow):
         self.toast.show_message(f"Exporté vers {target.name}")
 
     def _clear(self) -> None:
+        self.history_id = None
+        if self.history_panel is not None:
+            self.history_panel.select(None)
         self.session.clear()
         self.transcript.clear()
         self.transcript.show_empty()
@@ -626,6 +682,7 @@ class MainWindow(QMainWindow):
         self._status(f"Modèle {MODELS[key].model_name} prêt.", 4000)
 
     def _on_transcription_started(self) -> None:
+        self._new_history_entry()
         self.transcript.clear()
         self.transcript.hide_error()
         self.transcript.set_progress(0.0)
@@ -643,6 +700,112 @@ class MainWindow(QMainWindow):
             self.transcript.show_empty()
         if result is not None:
             self.session_finished.emit(result)
+
+    # ---- history ---------------------------------------------------------
+
+    def _new_history_entry(self) -> None:
+        self.history_id = None
+        self._autosaved_count = 0
+        if self.history_panel is not None:
+            self.history_panel.select(None)
+
+    def _history_on(self) -> bool:
+        return self.history is not None and self.settings.history_enabled
+
+    def _save_history(self, result: SessionResult) -> None:
+        title = result.name if result.kind == "file" else CAPTURE_TITLES.get(result.kind, result.name)
+        try:
+            self.history_id = self.history.save(
+                kind=result.kind,
+                title=title,
+                segments=result.segments,
+                entry_id=self.history_id,
+                source=str(result.source_path or ""),
+                model=result.model_key,
+                language=result.language,
+                duration=result.duration,
+            )
+        except Exception:
+            log.exception("Could not save the history")
+            return
+        self._autosaved_count = len(result.segments)
+        self.history_panel.current_id = self.history_id
+        self.history_panel.refresh()
+
+    def _autosave(self) -> None:
+        session = self.session
+        if session.idle or not self._history_on() or len(session.segments) == self._autosaved_count:
+            return
+        self._save_history(session.result())
+
+    def _record_history(self, result: SessionResult | None) -> None:
+        if result is None or not self._history_on():
+            return
+        self._save_history(result)
+        if self.history_id is not None and result.audio is not None and self.settings.history_keep_audio:
+            try:
+                self.history.attach_audio(self.history_id, result.audio)
+            except Exception:
+                log.exception("Could not keep the audio")
+            self.history_panel.refresh()
+
+    def record_dictation(self, text: str) -> None:
+        """Universal dictation: kept only if asked (text only, never the audio)."""
+        text = text.strip()
+        if not (self._history_on() and self.settings.history_dictation and text):
+            return
+        try:
+            self.history.save(
+                kind="dictation",
+                title=text.splitlines()[0][:60],
+                segments=[Segment(0.0, 0.0, text)],
+                model=self.settings.model_key,
+            )
+        except Exception:
+            log.exception("Could not save the dictation")
+            return
+        self.history_panel.refresh()
+
+    def _open_history_entry(self, entry_id: int) -> None:
+        entry = self.history.get(entry_id)
+        if entry is None:
+            return
+        if not self.session.open(entry.segments, entry.title):
+            self.toast.show_message("Terminez d'abord la transcription en cours")
+            self.history_panel.select(self.history_id)
+            return
+        self.history_id = entry_id
+        self.history_panel.select(entry_id)
+        self.transcript.hide_error()
+        if entry.segments:
+            self.transcript.render(entry.segments, self._timestamps())
+        else:
+            self.transcript.show_empty()
+        self._status(f"{entry.title} · {entry.date_label()}", 6000)
+
+    def _history_entry_deleted(self, entry_id: int) -> None:
+        if entry_id == self.history_id:
+            self.history_id = None
+
+    def _history_entry_renamed(self, entry_id: int, title: str) -> None:
+        if entry_id == self.history_id:
+            self.session.source_name = title
+
+    def _toggle_history(self, visible: bool) -> None:
+        if self.history_panel is None:
+            return
+        self.history_panel.setVisible(visible)
+        if visible:
+            self.history_panel.search.setFocus()
+        self._set_setting("history_visible", visible)
+
+    def clear_history(self) -> None:
+        if self.history is None:
+            return
+        self.history.clear()
+        self.history_id = None
+        self.history_panel.refresh()
+        self.toast.show_message("Historique effacé")
 
     # ---- CPU fallback ----------------------------------------------------
 
@@ -735,6 +898,9 @@ class MainWindow(QMainWindow):
             self.hidden_to_tray.emit()
             return
         self.session.shutdown()
+        self._autosave()
+        if self.history is not None:
+            self.history.close()
         self.save_settings()
         self.worker.shutdown()
         super().closeEvent(event)

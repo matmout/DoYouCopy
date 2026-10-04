@@ -345,3 +345,110 @@ def test_runtime_dialog_install_flow(app, monkeypatch):
 
     cpu = runtime_dialog.RuntimeSetupDialog(Detection("cpu", None, "Aucune carte graphique compatible détectée"))
     assert cpu.package is None and "processeur" in cpu.detail.text()
+
+
+# ---- history ------------------------------------------------------------------
+
+
+@pytest.fixture
+def history_window(app, tmp_path, monkeypatch):
+    from mywhisper.storage.history import HistoryStore
+
+    monkeypatch.setattr(Settings, "save", lambda self, path=None: None)
+    store = HistoryStore(tmp_path / "history")
+    windows = []
+
+    def factory(engine=None, **worker_kwargs):
+        window = MainWindow(
+            Settings(history_visible=True), ModelWorker(engine or FakeEngine(), **worker_kwargs), CPU.description, history=store
+        )
+        windows.append(window)
+        wait_until(app, lambda: window.session.model_ready)
+        return window
+
+    yield factory, store
+    for window in windows:
+        window.close()
+
+
+def test_finished_transcription_is_kept_and_reopened(app, history_window):
+    make, store = history_window
+    window = make()
+    window.session.transcribe_file(Path("C:/audio/entretien.mp3"))
+    wait_until(app, lambda: window.session.idle)
+    entries = store.list()
+    assert [e.title for e in entries] == ["entretien"] and window.history_id == entries[0].id
+    assert window.history_panel.list.count() == 1
+    assert "entretien" in window.history_panel.list.item(0).text()
+
+    window._clear()
+    assert window.segments == [] and window.history_id is None
+    window.history_panel.opened.emit(entries[0].id)
+    assert [s.text for s in window.segments] == ["Premier segment.", "Second segment."]
+    assert window.transcript.displayed_text() == "Premier segment.\nSecond segment."
+    assert window.session.source_name == "entretien" and window.history_id == entries[0].id
+
+    window.history_panel.search.setText("second")
+    window.history_panel.refresh()
+    assert window.history_panel.list.count() == 1 and "«Second»" in window.history_panel.list.item(0).text()
+    window.history_panel.search.setText("absent")
+    window.history_panel.refresh()
+    assert window.history_panel.list.count() == 0 and window.history_panel.empty.isVisibleTo(window)
+
+
+def test_live_session_autosaves_then_keeps_audio(app, history_window):
+    make, store = history_window
+    window = make(live_factory=FakeLive)
+    window.session.recorder = FakeRecorder()
+    window._start_live()
+    wait_until(app, lambda: len(window.segments) == 2)
+    window._autosave()  # what the timer does during a long session
+    draft = store.list()
+    assert len(draft) == 1 and draft[0].kind == "live"
+    window.session.stop_live()
+    wait_until(app, lambda: not window.session.live)
+    store.wait_for_audio()
+    entries = store.list()
+    assert len(entries) == 1 and entries[0].id == draft[0].id  # same entry, completed
+    entry = store.get(entries[0].id)
+    assert [s.text for s in entry.segments] == ["Bonjour tout le monde.", "Ceci est un test."]
+    assert entry.audio is not None
+
+
+def test_history_options(app, history_window):
+    make, store = history_window
+    window = make()
+    window.settings.history_keep_audio = False
+    window.session.recorder = FakeRecorder()
+    window.record_dictation("Texte dicté")
+    assert store.count() == 0  # dictations are not kept by default
+    window.settings.history_dictation = True
+    window.record_dictation("Texte dicté\nsur deux lignes")
+    assert [e.title for e in store.list()] == ["Texte dicté"]
+
+    window.settings.history_enabled = False
+    window.session.transcribe_file(Path("x.wav"))
+    wait_until(app, lambda: window.session.idle)
+    assert store.count() == 1
+
+    window.clear_history()
+    assert store.count() == 0 and window.history_panel.list.count() == 0
+
+
+def test_history_toggle_and_busy_session(app, history_window):
+    engine = FakeEngine()
+    make, store = history_window
+    window = make(engine)
+    entry_id = store.save(kind="file", title="ancien", segments=SEGMENTS)
+    window.history_panel.refresh()
+    window.show()
+    assert window.history_panel.isVisible()
+    window.history_button.click()
+    assert not window.history_panel.isVisible() and window.settings.history_visible is False
+
+    engine.release.clear()
+    window.session.transcribe_file(Path("x.wav"))
+    window._open_history_entry(entry_id)  # refused while a transcription runs
+    assert window.history_id != entry_id
+    engine.release.set()
+    wait_until(app, lambda: window.session.idle)

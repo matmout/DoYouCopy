@@ -8,8 +8,8 @@ import os
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QKeySequence
+from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtGui import QDesktopServices, QKeySequence
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -74,6 +74,7 @@ PAGES = (
     "Dictée",
     "Mode Direct",
     "Exports",
+    "Historique",
     "Modèles",
     "Matériel",
 )
@@ -84,6 +85,7 @@ class SettingsDialog(QDialog):
     vocabulary_requested = Signal()
     install_runtime_requested = Signal()
     reset_requested = Signal()
+    history_clear_requested = Signal()
 
     def __init__(
         self,
@@ -93,10 +95,12 @@ class SettingsDialog(QDialog):
         device_description: str = "",
         hardware_status: Callable[[], tuple[str, bool]] | None = None,
         hook=None,
+        history_dir: Path | None = None,
     ) -> None:
         super().__init__(parent)
         self.settings = settings
         self.hook = hook
+        self._history_dir = history_dir
         self._microphones = microphones or []
         self._device_description = device_description
         self._hardware_status = hardware_status or (lambda: ("", False))
@@ -117,6 +121,7 @@ class SettingsDialog(QDialog):
                 self._dictation,
                 self._live,
                 self._exports,
+                self._history,
                 self._models,
                 self._hardware,
             ),
@@ -416,6 +421,50 @@ class SettingsDialog(QDialog):
         form.addRow("Caractères par ligne", self._spin("subtitle_max_chars", 20, 80, 1))
         form.addRow("Lignes par sous-titre", self._spin("subtitle_max_lines", 1, 3, 1))
         form.addRow("", self._hint("Norme habituelle : 42 caractères, 2 lignes. Réseaux sociaux verticaux : 20 à 30, 1 ligne."))
+
+    def _history(self, layout: QVBoxLayout) -> None:
+        form = self._section(layout, "Enregistrement automatique")
+        form.addRow("", self._check("history_enabled", "Garder chaque transcription dans l'historique"))
+        form.addRow(
+            "",
+            self._check(
+                "history_dictation",
+                "Garder aussi le texte des dictées (raccourci global)",
+                "Désactivé par défaut : la dictée sert souvent pour des messages courts.",
+            ),
+        )
+        form = self._section(layout, "Audio")
+        form.addRow(
+            "",
+            self._check(
+                "history_keep_audio",
+                "Conserver l'audio des enregistrements (micro et Direct)",
+                "Pour réécouter un passage ou le retranscrire avec un autre modèle. FLAC, environ 60 Mo par heure.",
+            ),
+        )
+        days = self._spin("history_audio_days", 0, 3650, 1, " jours")
+        days.setSpecialValueText("Jamais")
+        form.addRow("Supprimer l'audio après", days)
+        form.addRow("", self._hint("Le texte est toujours conservé. Les fichiers importés ne sont pas copiés."))
+
+        form = self._section(layout, "Données")
+        if self._history_dir is not None:
+            folder = QPushButton("Ouvrir le dossier")
+            folder.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._history_dir))))
+            form.addRow("", folder)
+        erase = QPushButton("Tout effacer…")
+        erase.clicked.connect(self._confirm_history_clear)
+        erase.setEnabled(self._history_dir is not None)
+        self.history_clear_button = erase
+        form.addRow("", erase)
+        form.addRow("", self._hint("Tout reste sur ce PC, dans votre profil Windows."))
+
+    def _confirm_history_clear(self) -> None:
+        answer = QMessageBox.question(
+            self, "Effacer l'historique", "Effacer toutes les transcriptions et leur audio ? C'est définitif."
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            self.history_clear_requested.emit()
 
     def _models(self, layout: QVBoxLayout) -> None:
         form = self._section(layout, "Modèle utilisé")

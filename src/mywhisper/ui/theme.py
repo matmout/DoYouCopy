@@ -220,6 +220,14 @@ QHeaderView::section {{ background: {t.surface}; color: {t.muted}; border: none;
 #SettingsNav::item:selected {{ background: {t.elevated}; color: {t.text}; }}
 #SettingsNav::item:hover:!selected {{ background: {t.surface}; }}
 #SettingsPage {{ background: transparent; }}
+
+#HistoryPanel {{ background: {t.bg}; border-right: 1px solid {t.border}; }}
+#PanelTitle {{ font-size: 13px; font-weight: 600; }}
+#HistoryList {{ background: transparent; border: none; font-size: 12px; outline: none; }}
+#HistoryList::item {{ padding: 8px 10px; border-radius: 6px; margin: 1px 0; color: {t.text}; }}
+#HistoryList::item:selected {{ background: {t.elevated}; color: {t.text}; }}
+#HistoryList::item:hover:!selected {{ background: {t.surface}; }}
+#IconButton:checked {{ background: {t.elevated}; border-radius: 6px; }}
 #SettingsTitle {{ font-size: 17px; font-weight: 600; }}
 #SettingsSection {{ font-size: 11px; color: {t.muted}; font-weight: 600; }}
 #SettingsHint {{ font-size: 12px; color: {t.muted}; }}

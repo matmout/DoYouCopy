@@ -20,6 +20,11 @@ def default_settings_path() -> Path:
     return _app_dir("APPDATA", "Roaming") / "settings.json"
 
 
+def default_history_dir() -> Path:
+    override = os.environ.get("MYWHISPER_HISTORY_DIR")
+    return Path(override) if override else _app_dir("LOCALAPPDATA", "Local") / "history"
+
+
 def default_models_dir() -> Path:
     override = os.environ.get("MYWHISPER_MODELS_DIR")
     return Path(override) if override else _app_dir("LOCALAPPDATA", "Local") / "models"
@@ -71,6 +76,12 @@ class Settings:
     dictation_sounds: bool = True
     dictation_trailing_space: bool = True  # successive dictations do not stick together
     close_to_tray: bool = True
+    # history
+    history_enabled: bool = True
+    history_keep_audio: bool = True  # microphone captures, for replay and re-transcription
+    history_audio_days: int = 30  # the audio is deleted after N days, the text kept (0 = never)
+    history_dictation: bool = False  # also keep the text of universal dictations
+    history_visible: bool = False  # side panel shown
 
     def hotwords_prompt(self) -> str | None:
         words = [w.strip() for w in self.hotwords if w.strip()]

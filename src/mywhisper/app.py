@@ -48,7 +48,7 @@ def main() -> int:
     app.setApplicationName("MyWhisper")
     setup_style(app, settings.theme)
     worker = ModelWorker(engine)
-    window = MainWindow(settings, worker, device.description)
+    window = MainWindow(settings, worker, device.description, history=open_history(settings))
     window.setWindowIcon(theme.icon("ph.microphone-fill", window.tokens, "accent"))
     window.runtime_variant = choice.variant
     if not device.is_gpu:
@@ -60,6 +60,20 @@ def main() -> int:
     code = app.exec()
     engine.unload()  # frees the model, or keeps it alive where freeing would hang
     return code
+
+
+def open_history(settings: Settings):
+    """The history store, with its audio retention applied; None if it cannot be opened."""
+    from mywhisper.config import default_history_dir
+    from mywhisper.storage.history import HistoryStore
+
+    try:
+        store = HistoryStore(default_history_dir())
+        store.purge_audio(settings.history_audio_days)
+    except Exception:
+        log.exception("Could not open the history")
+        return None
+    return store
 
 
 def setup_logging() -> None:

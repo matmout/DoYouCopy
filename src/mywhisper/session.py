@@ -39,7 +39,24 @@ class SessionResult:
     duration: float  # audio seconds
     model_key: str
     source_path: Path | None = None  # the imported file
-    audio: np.ndarray | None = None  # 16 kHz mono samples of a microphone capture
+    audio: np.ndarray | None = None  # 16 kHz mono samples of a microphone capture (float32 or int16)
+
+
+class _Tee:
+    """Live source that keeps a copy of what the live transcriber drains (int16, half the memory)."""
+
+    def __init__(self, source) -> None:
+        self.source = source
+        self.chunks: list[np.ndarray] = []
+
+    def drain(self) -> np.ndarray:
+        samples = self.source.drain()
+        if samples.size:
+            self.chunks.append((np.clip(samples, -1.0, 1.0) * 32767).astype(np.int16))
+        return samples
+
+    def audio(self) -> np.ndarray | None:
+        return np.concatenate(self.chunks) if self.chunks else None
 
 
 class SessionController(QObject):
@@ -75,6 +92,7 @@ class SessionController(QObject):
         self._kind = FILE_KIND
         self._source_path: Path | None = None
         self._audio: np.ndarray | None = None
+        self._tee: _Tee | None = None
 
         w = worker
         w.model_loading.connect(self._on_model_loading)
@@ -101,6 +119,10 @@ class SessionController(QObject):
     @property
     def capturing(self) -> bool:
         return self.recording or self.live
+
+    @property
+    def keeps_audio(self) -> bool:
+        return self.settings.history_enabled and self.settings.history_keep_audio
 
     @property
     def available(self) -> bool:
@@ -153,7 +175,7 @@ class SessionController(QObject):
             self.status.emit("Enregistrement trop court.", 4000)
             self.finished.emit(None)
             return
-        self._transcribe(audio, RECORD, "dictee", samples=audio)
+        self._transcribe(audio, RECORD, "dictee", samples=audio if self.keeps_audio else None)
 
     def start_live(self) -> bool:
         if not self.available or not self._open_microphone():
@@ -169,7 +191,11 @@ class SessionController(QObject):
         self.capture_started.emit(LIVE_KIND)
         self.changed.emit()
         self.worker.live_config = live_config(self.settings)
-        self.worker.start_live(self.recorder, transcribe_options(self.settings, LIVE))
+        source = self.recorder
+        self._tee = None
+        if self.keeps_audio:
+            source = self._tee = _Tee(self.recorder)
+        self.worker.start_live(source, transcribe_options(self.settings, LIVE))
         return True
 
     def stop_live(self) -> None:
@@ -211,6 +237,16 @@ class SessionController(QObject):
 
     def cancel(self) -> None:
         self.worker.cancel()
+
+    def open(self, segments: list[Segment], name: str) -> bool:
+        """Shows a past transcription (history) as the current result."""
+        if not self.available:
+            return False
+        self.segments = list(segments)
+        self.source_name = name
+        self.status.emit("", 0)
+        self.changed.emit()
+        return True
 
     def clear(self) -> None:
         self.segments = []
@@ -293,6 +329,8 @@ class SessionController(QObject):
         self.recorder.stop()
         self.capture_stopped.emit()
         self.segments = merge_sentences(self.segments)
+        if self._tee is not None:
+            self._audio, self._tee = self._tee.audio(), None
         self.status.emit(f"Direct terminé · {len(self.segments)} phrase(s)", 6000)
         self.changed.emit()
         self.finished.emit(self.result() if self.segments else None)
