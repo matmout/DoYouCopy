@@ -1,13 +1,13 @@
 ﻿<#
 .SYNOPSIS
-    Crée le venv MyWhisper avec faster-whisper accéléré par ROCm (AMD Radeon, Windows).
+    Crée le venv DoYouCopy avec faster-whisper accéléré par ROCm (AMD Radeon, Windows).
 
 .DESCRIPTION
     1. Crée .venv avec la version de Python demandée.
     2. Installe le runtime ROCm 7.2 en paquets pip (TheRock), celui contre lequel
        CTranslate2 est compilé.
     3. Installe la wheel ROCm Windows de CTranslate2 depuis la release GitHub.
-    4. Installe MyWhisper et ses dépendances (ctranslate2 épinglé par constraints.txt).
+    4. Installe DoYouCopy et ses dépendances (ctranslate2 épinglé par constraints.txt).
     5. Vérifie le GPU, puis télécharge les modèles (sauf -SkipModels).
 
     Compatible Windows PowerShell 5.1 et PowerShell 7.
@@ -52,7 +52,7 @@ Invoke-Checked $Py @(
 
 Write-Host "==> [3/5] CTranslate2 $Ct2Version (build ROCm)" -ForegroundColor Cyan
 $Tag = (& $Py -c "import sys; print(f'cp{sys.version_info[0]}{sys.version_info[1]}')").Trim()
-$Work = Join-Path $env:TEMP "mywhisper-ct2-rocm-$Ct2Version"
+$Work = Join-Path $env:TEMP "doyoucopy-ct2-rocm-$Ct2Version"
 $ZipPath = Join-Path $Work "wheels.zip"
 New-Item -ItemType Directory -Force -Path $Work | Out-Null
 if (-not (Test-Path $ZipPath)) {
@@ -66,7 +66,7 @@ if (-not $Wheel) {
 Invoke-Checked $Py @("-m", "pip", "install", "--force-reinstall", "--no-deps", $Wheel.FullName)
 Invoke-Checked $Py @("-m", "pip", "install", "numpy", "pyyaml>=5.3,<7")
 
-Write-Host "==> [4/5] MyWhisper et dépendances" -ForegroundColor Cyan
+Write-Host "==> [4/5] DoYouCopy et dépendances" -ForegroundColor Cyan
 Push-Location $Root
 try {
     Invoke-Checked $Py @("-m", "pip", "install", "-c", "constraints.txt", "-e", ".[dev]")
@@ -84,4 +84,4 @@ if (-not $SkipModels) {
 
 Write-Host ""
 Write-Host "Installation terminée. Lancer l'application :" -ForegroundColor Green
-Write-Host "  .\.venv\Scripts\mywhisper.exe"
+Write-Host "  .\.venv\Scripts\doyoucopy.exe"

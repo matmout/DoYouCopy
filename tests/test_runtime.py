@@ -10,10 +10,10 @@ import zipfile
 
 import pytest
 
-from mywhisper.download import DownloadCancelled, DownloadError, download_file
-from mywhisper.runtime import gpu_detect, install, startup, store
-from mywhisper.runtime.gpu_detect import AMD, CPU, NVIDIA, Adapter, classify, parse_adapters
-from mywhisper.runtime.packages import Download, RuntimePackage, package_for
+from doyoucopy.download import DownloadCancelled, DownloadError, download_file
+from doyoucopy.runtime import gpu_detect, install, startup, store
+from doyoucopy.runtime.gpu_detect import AMD, CPU, NVIDIA, Adapter, classify, parse_adapters
+from doyoucopy.runtime.packages import Download, RuntimePackage, package_for
 
 # ---- detection -------------------------------------------------------------
 
@@ -254,7 +254,7 @@ def test_activate_puts_amd_ct2_first_and_nvidia_dlls_on_path(tmp_path, monkeypat
 
 def test_prepare_uses_an_installed_runtime(tmp_path, monkeypatch):
     package, opener = fake_amd_package()
-    monkeypatch.setenv("MYWHISPER_RUNTIME_DIR", str(tmp_path))
+    monkeypatch.setenv("DOYOUCOPY_RUNTIME_DIR", str(tmp_path))
     monkeypatch.setattr(sys, "path", list(sys.path))
     monkeypatch.setattr(startup, "package_for", lambda variant, tag=None: package if variant == AMD else None)
     assert startup.prepare("auto").variant == "dev"  # nothing installed, source checkout

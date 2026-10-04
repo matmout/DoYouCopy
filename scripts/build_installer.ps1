@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    Construit l'installeur Windows de MyWhisper : PyInstaller (dossier) puis Inno Setup.
+    Construit l'installeur Windows de DoYouCopy : PyInstaller (dossier) puis Inno Setup.
 
 .DESCRIPTION
     1. Installe PyInstaller dans .venv (créé par scripts\install_rocm.ps1).
@@ -12,7 +12,7 @@
     5. Signe l'exécutable si un certificat est fourni, puis compile l'installeur.
 
     Signature (facultative) : -CertFile chemin\vers\cert.pfx (mot de passe dans la
-    variable d'environnement MYWHISPER_SIGN_PASSWORD) ou -CertThumbprint (certificat
+    variable d'environnement DOYOUCOPY_SIGN_PASSWORD) ou -CertThumbprint (certificat
     du magasin Windows). Sans certificat, l'installeur n'est pas signé et Windows
     SmartScreen affichera un avertissement.
 
@@ -32,7 +32,7 @@ $Py = Join-Path $Root ".venv\Scripts\python.exe"
 $Build = Join-Path $Root "build"
 $Cache = Join-Path $Build "cache"
 $Dist = Join-Path $Root "dist"
-$AppDir = Join-Path $Build "dist\MyWhisper"
+$AppDir = Join-Path $Build "dist\DoYouCopy"
 
 $Ct2Url = "https://files.pythonhosted.org/packages/c2/fc/a9e9e0ce1c0a29bc4c17bf56ccb4274293c0bbb2b8aae561727d82fcb0ca/ctranslate2-4.8.2-cp313-cp313-win_amd64.whl"
 $Ct2Sha = "399c20a7336b6358f69ce3c615e090eabc08f29735a079fd1ac1e464119e0861"
@@ -62,7 +62,7 @@ if ($Sign) {
     if (-not $SignTool) { throw "signtool.exe introuvable (Windows SDK)" }
     if ($CertFile) {
         $SignArgs = @("sign", "/fd", "SHA256", "/tr", $TimestampUrl, "/td", "SHA256", "/f", $CertFile)
-        if ($env:MYWHISPER_SIGN_PASSWORD) { $SignArgs += @("/p", $env:MYWHISPER_SIGN_PASSWORD) }
+        if ($env:DOYOUCOPY_SIGN_PASSWORD) { $SignArgs += @("/p", $env:DOYOUCOPY_SIGN_PASSWORD) }
     } else {
         $SignArgs = @("sign", "/fd", "SHA256", "/tr", $TimestampUrl, "/td", "SHA256", "/sha1", $CertThumbprint)
     }
@@ -88,18 +88,18 @@ if (-not $SkipPyInstaller) {
     Invoke-Checked $Py @(
         "-m", "PyInstaller", "--noconfirm", "--clean",
         "--distpath", (Join-Path $Build "dist"), "--workpath", (Join-Path $Build "pyinstaller"),
-        (Join-Path $Root "packaging\mywhisper.spec")
+        (Join-Path $Root "packaging\doyoucopy.spec")
     )
 }
 
 Write-Host "==> [4/5] Vérification de l'exécutable" -ForegroundColor Cyan
-$Exe = Join-Path $AppDir "MyWhisper.exe"
+$Exe = Join-Path $AppDir "DoYouCopy.exe"
 $Probe = Join-Path $Build "probe.json"
 if (Test-Path $Probe) { Remove-Item $Probe }
-$env:MYWHISPER_RUNTIME_DIR = Join-Path $Build "probe-runtime"  # ignore les runtimes déjà installés
+$env:DOYOUCOPY_RUNTIME_DIR = Join-Path $Build "probe-runtime"  # ignore les runtimes déjà installés
 $process = Start-Process -FilePath $Exe -ArgumentList @("--probe", "`"$Probe`"") -Wait -PassThru
-Remove-Item Env:\MYWHISPER_RUNTIME_DIR
-if (-not (Test-Path $Probe)) { throw "MyWhisper.exe --probe n'a rien écrit (code $($process.ExitCode))" }
+Remove-Item Env:\DOYOUCOPY_RUNTIME_DIR
+if (-not (Test-Path $Probe)) { throw "DoYouCopy.exe --probe n'a rien écrit (code $($process.ExitCode))" }
 $result = Get-Content $Probe -Raw | ConvertFrom-Json
 if ($result.error) { throw "Le moteur embarqué ne se charge pas : $($result.error)" }
 Write-Host "    CTranslate2 $($result.ct2) chargé, GPU CUDA : $($result.devices)"
@@ -118,9 +118,9 @@ if ($Sign) {
 } else {
     Write-Warning "Installeur NON signé : Windows SmartScreen affichera un avertissement."
 }
-Invoke-Checked $Iscc ($IsccArgs + @((Join-Path $Root "installer\mywhisper.iss")))
+Invoke-Checked $Iscc ($IsccArgs + @((Join-Path $Root "installer\doyoucopy.iss")))
 
-$Setup = Join-Path $Dist "MyWhisper-Setup-$Version.exe"
+$Setup = Join-Path $Dist "DoYouCopy-Setup-$Version.exe"
 $Size = [math]::Round((Get-Item $Setup).Length / 1MB)
 $Hash = (Get-FileHash $Setup -Algorithm SHA256).Hash.ToLower()
 Write-Host ""

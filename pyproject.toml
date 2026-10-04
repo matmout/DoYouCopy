@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mywhisper"
+name = "doyoucopy"
 dynamic = ["version"]
 description = "Transcription vocale locale (faster-whisper + ROCm) pour Windows"
 readme = "README.md"
@@ -27,16 +27,16 @@ dev = ["pytest>=8", "ruff>=0.6"]
 build = ["pyinstaller>=6.10"]
 
 [project.scripts]
-mywhisper = "mywhisper.app:main"
+doyoucopy = "doyoucopy.app:main"
 
 [tool.setuptools.dynamic]
-version = { attr = "mywhisper.__version__" }
+version = { attr = "doyoucopy.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-"mywhisper.ui" = ["resources/fonts/*.ttf", "resources/fonts/OFL.txt"]
+"doyoucopy.ui" = ["resources/fonts/*.ttf", "resources/fonts/OFL.txt"]
 
 [tool.ruff]
 line-length = 120

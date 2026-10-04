@@ -3,8 +3,8 @@ import time
 import numpy as np
 import pytest
 
-from mywhisper.core.types import SAMPLE_RATE, Segment, Word
-from mywhisper.storage.history import HistoryStore, fts_query, segments_from_json, segments_to_json
+from doyoucopy.core.types import SAMPLE_RATE, Segment, Word
+from doyoucopy.storage.history import HistoryStore, fts_query, segments_from_json, segments_to_json
 
 SEGMENTS = [
     Segment(0.0, 1.5, "Réunion sur ROCm7 et CTranslate2.", (Word(0.0, 0.6, " Réunion"), Word(0.6, 0.9, " sur"))),
@@ -122,4 +122,22 @@ def test_reopen_keeps_the_data(tmp_path):
     store.close()
     store = HistoryStore(tmp_path)
     assert store.get(entry_id).segments == SEGMENTS
+    store.close()
+
+
+def test_moved_folder_keeps_its_audio(tmp_path):
+    """Audio paths are absolute: after the folder moves (MyWhisper → DoYouCopy), they are
+    re-pointed instead of the files being swept as orphans."""
+    samples = (np.sin(np.arange(SAMPLE_RATE) / 10) * 0.3).astype(np.float32)
+    store = HistoryStore(tmp_path / "old")
+    entry_id = store.save(kind="record", title="déménagé", segments=SEGMENTS)
+    store.attach_audio(entry_id, samples, wait=True)
+    store.close()
+    store.db.close()
+    (tmp_path / "old").rename(tmp_path / "new")
+
+    store = HistoryStore(tmp_path / "new")
+    assert store.remove_orphan_audio() == 0
+    audio = store.get(entry_id).audio
+    assert audio is not None and audio.parent == store.audio_dir and audio.exists()
     store.close()

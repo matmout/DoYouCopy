@@ -1,6 +1,6 @@
 import numpy as np
 
-from mywhisper.audio.recorder import resample
+from doyoucopy.audio.recorder import resample
 
 
 def test_resample_length_and_dtype():
@@ -23,7 +23,7 @@ def test_resample_noop():
 
 
 def test_drain_returns_only_new_audio():
-    from mywhisper.audio.recorder import MicRecorder
+    from doyoucopy.audio.recorder import MicRecorder
 
     recorder = MicRecorder()
     block = np.ones((1600, 1), dtype=np.float32)

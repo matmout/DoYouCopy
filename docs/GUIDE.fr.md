@@ -1,4 +1,4 @@
-# MyWhisper : guide détaillé
+# DoYouCopy : guide détaillé
 
 Transcription vocale **100 % locale et hors ligne** pour Windows : faster-whisper (`large-v3-turbo` ou `large-v3`) accéléré par **ROCm** sur GPU AMD Radeon (testé sur RX 7800 XT, gfx1101), avec une fenêtre native PySide6.
 
@@ -24,7 +24,7 @@ Le GPU AMD apparaît sous le device `"cuda"` de CTranslate2 : c'est le nom histo
 
 ## Installation (utilisateurs)
 
-Téléchargez et lancez `MyWhisper-Setup-<version>.exe` (Windows 10 / 11, 64 bits). L'installation se fait dans votre profil, **sans droits administrateur**. L'installeur propose deux raccourcis : **dans le menu Démarrer** (coché par défaut) et **sur le Bureau**. Vous pourrez les ajouter ou les retirer plus tard dans les réglages (Général → Raccourcis). À la fin :
+Téléchargez et lancez `DoYouCopy-Setup-<version>.exe` (Windows 10 / 11, 64 bits). L'installation se fait dans votre profil, **sans droits administrateur**. L'installeur propose deux raccourcis : **dans le menu Démarrer** (coché par défaut) et **sur le Bureau**. Vous pourrez les ajouter ou les retirer plus tard dans les réglages (Général → Raccourcis). À la fin :
 
 1. l'installeur **détecte la carte graphique** et télécharge l'accélération correspondante depuis les sources officielles, avec des versions et des empreintes SHA-256 figées :
 
@@ -34,10 +34,10 @@ Téléchargez et lancez `MyWhisper-Setup-<version>.exe` (Windows 10 / 11, 64 bit
    | AMD Radeon RX 6800 / 6900, RX 7000, RX 9000, Radeon 780M / 880M / 890M | ROCm 7.2 | ~1,2 Go |
    | Autres (Intel, AMD plus anciennes, aucune carte) | aucune : processeur | — |
 
-   La carte est ensuite testée réellement. En cas d'échec (pilote trop ancien), MyWhisper utilise le processeur et l'explique.
+   La carte est ensuite testée réellement. En cas d'échec (pilote trop ancien), DoYouCopy utilise le processeur et l'explique.
 2. au **premier lancement**, le modèle Turbo (~1,6 Go) se télécharge avec une barre de progression. Le modèle Précis (~3 Go) se télécharge la première fois qu'on le choisit.
 
-Sans accélération, un bandeau « **Transcription plus lente sur cette machine** » en donne la raison. Si une carte compatible est présente, le bouton **Installer l'accélération** télécharge ce qu'il faut, puis redémarre MyWhisper.
+Sans accélération, un bandeau « **Transcription plus lente sur cette machine** » en donne la raison. Si une carte compatible est présente, le bouton **Installer l'accélération** télécharge ce qu'il faut, puis redémarre DoYouCopy.
 
 L'installeur n'est pas encore signé : Windows SmartScreen affiche « Windows a protégé votre ordinateur ». Cliquez sur **Informations complémentaires**, puis sur **Exécuter quand même**.
 
@@ -62,17 +62,17 @@ Le script :
 1. crée `.venv` (option `-Python 3.12` pour changer de version) ;
 2. installe le runtime ROCm 7.2 depuis `repo.radeon.com` ;
 3. télécharge la wheel ROCm de CTranslate2 4.8.2 correspondant à la version de Python et l'installe ;
-4. installe MyWhisper et ses dépendances (`constraints.txt` empêche pip de remplacer ctranslate2 par la build CUDA de PyPI) ;
+4. installe DoYouCopy et ses dépendances (`constraints.txt` empêche pip de remplacer ctranslate2 par la build CUDA de PyPI) ;
 5. lance `scripts/check_gpu.py`, puis télécharge les deux modèles (sauf avec `-SkipModels`).
 
-Les modèles sont stockés dans `%LOCALAPPDATA%\MyWhisper\models`. Pour changer cet emplacement, définissez la variable d'environnement `MYWHISPER_MODELS_DIR` ou la clé `models_dir` des réglages. Une fois les modèles présents, l'application n'a plus besoin du réseau : elle charge toujours le cache local en priorité.
+Les modèles sont stockés dans `%LOCALAPPDATA%\DoYouCopy\models`. Pour changer cet emplacement, définissez la variable d'environnement `DOYOUCOPY_MODELS_DIR` ou la clé `models_dir` des réglages. Une fois les modèles présents, l'application n'a plus besoin du réseau : elle charge toujours le cache local en priorité.
 
 ## Utilisation
 
 ```powershell
-.\.venv\Scripts\mywhisper.exe
+.\.venv\Scripts\doyoucopy.exe
 # ou
-.\.venv\Scripts\python.exe -m mywhisper
+.\.venv\Scripts\python.exe -m doyoucopy
 ```
 
 | Raccourci | Action |
@@ -91,9 +91,9 @@ Le grand bouton micro démarre et arrête la capture dans le mode choisi au-dess
 
 ## Réglages
 
-Chaque changement s'applique tout de suite et est enregistré dans `%APPDATA%\MyWhisper\settings.json`. Si ce fichier est abîmé ou modifié à la main avec une valeur invalide, seule cette valeur revient à son défaut (un avertissement est écrit dans le journal).
+Chaque changement s'applique tout de suite et est enregistré dans `%APPDATA%\DoYouCopy\settings.json`. Si ce fichier est abîmé ou modifié à la main avec une valeur invalide, seule cette valeur revient à son défaut (un avertissement est écrit dans le journal).
 
-Les raccourcis et le démarrage avec Windows ne sont pas des réglages : les cases reflètent les fichiers réellement présents (raccourcis `.lnk`, clé `Run` du registre). Depuis les sources, le raccourci lance `pythonw.exe -m mywhisper` avec l'icône de l'application.
+Les raccourcis et le démarrage avec Windows ne sont pas des réglages : les cases reflètent les fichiers réellement présents (raccourcis `.lnk`, clé `Run` du registre). Depuis les sources, le raccourci lance `pythonw.exe -m doyoucopy` avec l'icône de l'application.
 
 | Section | Réglages |
 |---|---|
@@ -117,7 +117,7 @@ Le passage du GPU au processeur (et inversement), la précision, les threads et 
 
 ## Dictée universelle
 
-MyWhisper reste dans la zone de notification avec le modèle chargé. Depuis n'importe quelle application :
+DoYouCopy reste dans la zone de notification avec le modèle chargé. Depuis n'importe quelle application :
 
 - **Maintenir** (par défaut) : gardez **Ctrl+Maj+Espace** enfoncé pendant que vous parlez, relâchez pour insérer le texte ;
 - **Basculer** : un appui pour démarrer, un second pour arrêter ;
@@ -159,7 +159,7 @@ Le bouton **◉ Direct** transcrit en continu, sans attendre la fin d'un enregis
 
 À l'arrêt, le texte est regroupé en phrases. La copie et les exports fonctionnent comme pour un enregistrement.
 
-Whisper ne sait pas traiter un flux audio en continu. MyWhisper re-transcrit donc chaque seconde une fenêtre glissante d'audio, en suivant la méthode LocalAgreement de [whisper_streaming](https://github.com/ufal/whisper_streaming), implémentée dans `core/live.py` :
+Whisper ne sait pas traiter un flux audio en continu. DoYouCopy re-transcrit donc chaque seconde une fenêtre glissante d'audio, en suivant la méthode LocalAgreement de [whisper_streaming](https://github.com/ufal/whisper_streaming), implémentée dans `core/live.py` :
 
 - un mot est validé quand **deux passes successives** s'accordent dessus et qu'il ne se termine pas au bord de la fenêtre. C'est là que Whisper a tendance à « deviner » la suite de la phrase ;
 - les mots déjà validés sont reconnus dans les passes suivantes grâce à leurs timestamps, puis ignorés ;
@@ -183,10 +183,10 @@ Prérequis : le `.venv` de développement et [Inno Setup 6](https://jrsoftware.o
 
 1. embarque la wheel CTranslate2 de PyPI (CPU + CUDA), vérifiée par son empreinte ;
 2. construit l'application avec PyInstaller en mode dossier, sans console ni UPX ;
-3. vérifie que l'exécutable charge son moteur (`MyWhisper.exe --probe`) ;
-4. compile `dist\MyWhisper-Setup-<version>.exe` avec Inno Setup (~90 Mo).
+3. vérifie que l'exécutable charge son moteur (`DoYouCopy.exe --probe`) ;
+4. compile `dist\DoYouCopy-Setup-<version>.exe` avec Inno Setup (~90 Mo).
 
-Pour signer l'installeur, passez `-CertFile cert.pfx` (mot de passe dans `MYWHISPER_SIGN_PASSWORD`) ou `-CertThumbprint <empreinte>`. Le script utilise alors `signtool` du Windows SDK.
+Pour signer l'installeur, passez `-CertFile cert.pfx` (mot de passe dans `DOYOUCOPY_SIGN_PASSWORD`) ou `-CertThumbprint <empreinte>`. Le script utilise alors `signtool` du Windows SDK.
 
 Options de l'exécutable :
 
@@ -196,11 +196,11 @@ Options de l'exécutable :
 | `--probe fichier.json` | écrit ce que voit CTranslate2 (nombre de GPU, types de calcul) |
 | `--minimized` | démarre dans la zone de notification (démarrage avec Windows) |
 
-L'accélération est installée dans `%LOCALAPPDATA%\MyWhisper\runtime` (variable `MYWHISPER_RUNTIME_DIR` pour un autre emplacement). Le journal de l'application packagée se trouve dans `%LOCALAPPDATA%\MyWhisper\logs`.
+L'accélération est installée dans `%LOCALAPPDATA%\DoYouCopy\runtime` (variable `DOYOUCOPY_RUNTIME_DIR` pour un autre emplacement). Le journal de l'application packagée se trouve dans `%LOCALAPPDATA%\DoYouCopy\logs`.
 
 ## Historique
 
-Chaque transcription (enregistrement, Direct, fichier) est enregistrée automatiquement dans `%LOCALAPPDATA%\MyWhisper\history`, base SQLite avec recherche plein texte (FTS5). Les longues sessions sont sauvegardées toutes les 30 secondes : un plantage ne fait perdre que les dernières secondes. Le panneau **Historique** (Ctrl+H) liste les sessions : la recherche ignore les accents et trouve les débuts de mots, un clic ouvre une transcription, le clic droit permet de la renommer (F2), de l'ajouter aux favoris ou de la supprimer (Suppr).
+Chaque transcription (enregistrement, Direct, fichier) est enregistrée automatiquement dans `%LOCALAPPDATA%\DoYouCopy\history`, base SQLite avec recherche plein texte (FTS5). Les longues sessions sont sauvegardées toutes les 30 secondes : un plantage ne fait perdre que les dernières secondes. Le panneau **Historique** (Ctrl+H) liste les sessions : la recherche ignore les accents et trouve les débuts de mots, un clic ouvre une transcription, le clic droit permet de la renommer (F2), de l'ajouter aux favoris ou de la supprimer (Suppr).
 
 L'audio des enregistrements micro et Direct est conservé en FLAC (environ 60 Mo par heure), puis supprimé après 30 jours par défaut ; le texte reste. Supprimer une transcription supprime aussi son audio, même s'il est ouvert dans le lecteur ; au démarrage, les fichiers audio qui ne correspondent plus à aucune transcription (suppression refusée par Windows, plantage pendant l'encodage) sont effacés. Les fichiers importés ne sont pas copiés : le lecteur rejoue le fichier d'origine tant qu'il existe. Le texte des dictées universelles est conservé aussi (jamais leur audio), sauf si l'option est désactivée dans les réglages.
 
@@ -212,7 +212,7 @@ Quand l'audio est disponible, un lecteur apparaît sous la transcription : lectu
 
 ## Diagnostic
 
-**Réglages > Matériel > Copier les informations de diagnostic** copie un rapport à joindre à un signalement : Windows, carte graphique et pilote, cartes vues par CTranslate2, versions des bibliothèques, modèles présents, réglages et dernières erreurs du journal. Le rapport ne contient ni transcription, ni vocabulaire, ni contexte. Le journal de l'application est dans `%LOCALAPPDATA%\MyWhisper\logs\mywhisper.log` (bouton **Ouvrir le dossier des journaux**).
+**Réglages > Matériel > Copier les informations de diagnostic** copie un rapport à joindre à un signalement : Windows, carte graphique et pilote, cartes vues par CTranslate2, versions des bibliothèques, modèles présents, réglages et dernières erreurs du journal. Le rapport ne contient ni transcription, ni vocabulaire, ni contexte. Le journal de l'application est dans `%LOCALAPPDATA%\DoYouCopy\logs\doyoucopy.log` (bouton **Ouvrir le dossier des journaux**).
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\check_gpu.py
@@ -226,9 +226,9 @@ Ce script affiche la version de CTranslate2, la présence du runtime ROCm et le 
 ## Architecture
 
 ```
-src/mywhisper/
+src/doyoucopy/
   app.py              bootstrap : détection GPU (avant Qt), moteur, fenêtre
-  config.py           réglages JSON (%APPDATA%\MyWhisper\settings.json), validés valeur par valeur
+  config.py           réglages JSON (%APPDATA%\DoYouCopy\settings.json), validés valeur par valeur
   session.py          SessionController : capture, transcription, corrections, résultat courant (sans Qt Widgets)
   history_controller.py  HistoryController : entrée courante, sauvegarde auto, audio et dictées conservés (sans Qt Widgets)
   diagnostics.py      journal, exceptions non rattrapées, rapport de diagnostic
@@ -282,8 +282,8 @@ src/mywhisper/
 scripts/              install_rocm.ps1, check_gpu.py, download_models.py,
                       snapshot_ui.py (captures de l'interface dans chaque état),
                       build_installer.ps1, make_build_assets.py (icône, version)
-packaging/            PyInstaller : mywhisper.spec, launcher.py
-installer/            Inno Setup : mywhisper.iss
+packaging/            PyInstaller : doyoucopy.spec, launcher.py
+installer/            Inno Setup : doyoucopy.iss
 tests/                tests unitaires + test GPU de bout en bout (-m gpu)
 ```
 

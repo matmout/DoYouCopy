@@ -1,8 +1,10 @@
 <div align="center">
 
-# MyWhisper
+<img src="docs/icon.png" alt="DoYouCopy icon" width="96">
 
-**Private, offline speech-to-text for Windows.**
+# DoYouCopy
+
+***I talk, you write.*** **Private, offline speech-to-text for Windows.**
 Dictate into any app or transcribe audio files. Everything runs on your own PC, and nothing leaves it.
 
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows&logoColor=white)
@@ -12,15 +14,15 @@ Dictate into any app or transcribe audio files. Everything runs on your own PC, 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL%20v3-blue)](LICENSE)
 
-### [⬇️ Download MyWhisper for Windows](https://github.com/matmout/Mywhisper/releases/latest)
+### [⬇️ Download DoYouCopy for Windows](https://github.com/matmout/DoYouCopy/releases/latest)
 
-[![Download for Windows](https://img.shields.io/badge/Download%20for%20Windows-latest%20release-ED1C24?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/matmout/Mywhisper/releases/latest)
+[![Download for Windows](https://img.shields.io/badge/Download%20for%20Windows-latest%20release-ED1C24?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/matmout/DoYouCopy/releases/latest)
 
 <sub>Free · Windows 10 / 11 (64-bit) · no administrator rights needed</sub>
 
 | Live mode, dark theme | Finished transcript, light theme |
 |---|---|
-| ![MyWhisper live mode](docs/apercu-direct-sombre.png) | ![MyWhisper finished transcript](docs/apercu-termine-clair.png) |
+| ![DoYouCopy live mode](docs/apercu-direct-sombre.png) | ![DoYouCopy finished transcript](docs/apercu-termine-clair.png) |
 
 </div>
 
@@ -28,7 +30,7 @@ Dictate into any app or transcribe audio files. Everything runs on your own PC, 
 
 Most dictation tools send your voice to someone else's computer. **Windows voice typing (Win + H)** uses Microsoft's online speech recognition. Google Docs voice typing, and cloud transcription services, work the same way. Your audio, and the text made from it, go to their servers. There they can be stored, analyzed or used to train models, under terms you don't control.
 
-MyWhisper works differently:
+DoYouCopy works differently:
 
 - 🔒 **Transcription runs 100% on your machine.** Audio and text never leave it.
 - 🚫 **No account, no telemetry, no analytics, no cloud.**
@@ -51,7 +53,7 @@ Good for meetings, interviews, medical or legal notes, or anything you'd rather 
 
 ## Hardware: GPU or CPU
 
-MyWhisper is built on [faster-whisper](https://github.com/SYSTRAN/faster-whisper). The installer detects your graphics card and downloads the right acceleration:
+DoYouCopy is built on [faster-whisper](https://github.com/SYSTRAN/faster-whisper). The installer detects your graphics card and downloads the right acceleration:
 
 | Hardware | Acceleration | Speed |
 |---|---|---|
@@ -62,13 +64,13 @@ MyWhisper is built on [faster-whisper](https://github.com/SYSTRAN/faster-whisper
 For example, on a Radeon RX 7800 XT, 15 s of speech is transcribed in about 1 second (14× real time).
 
 > [!NOTE]
-> **CPU only?** MyWhisper still works, but transcription takes a lot longer, especially with long files and the Precise model. Choose the **Light** model for the best speed. If the GPU can't be used (for example, the driver is too old), MyWhisper switches to the CPU on its own and tells you why.
+> **CPU only?** DoYouCopy still works, but transcription takes a lot longer, especially with long files and the Precise model. Choose the **Light** model for the best speed. If the GPU can't be used (for example, the driver is too old), DoYouCopy switches to the CPU on its own and tells you why.
 
 ## Installation
 
-1. Download `MyWhisper-Setup-<version>.exe` from the [latest release](https://github.com/matmout/Mywhisper/releases/latest) (Windows 10 / 11, 64-bit).
+1. Download `DoYouCopy-Setup-<version>.exe` from the [latest release](https://github.com/matmout/DoYouCopy/releases/latest) (Windows 10 / 11, 64-bit).
 2. Run it. **No administrator rights are needed**: it installs into your user profile. You can add a Start menu shortcut (checked by default) and a Desktop shortcut; both can be changed later in **Settings → General → Shortcuts**.
-3. At the end of setup, MyWhisper detects your graphics card and downloads the matching acceleration (~1.2 GB, from official sources, with pinned versions and SHA-256 checks). It then tests the card for real.
+3. At the end of setup, DoYouCopy detects your graphics card and downloads the matching acceleration (~1.2 GB, from official sources, with pinned versions and SHA-256 checks). It then tests the card for real.
 4. On first launch, the Turbo model (~1.6 GB) downloads with a progress bar. After that, no internet connection is needed.
 
 > [!TIP]
@@ -83,10 +85,10 @@ Requirements: Python 3.10–3.14 (x64) and a recent GPU driver. The script below
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\install_rocm.ps1
-.\.venv\Scripts\mywhisper.exe
+.\.venv\Scripts\doyoucopy.exe
 ```
 
-It creates `.venv`, installs the ROCm runtime and the ROCm build of CTranslate2, installs MyWhisper, checks the GPU and downloads the models. To build the installer, use `scripts\build_installer.ps1` (needs [Inno Setup 6](https://jrsoftware.org/isinfo.php)).
+It creates `.venv`, installs the ROCm runtime and the ROCm build of CTranslate2, installs DoYouCopy, checks the GPU and downloads the models. To build the installer, use `scripts\build_installer.ps1` (needs [Inno Setup 6](https://jrsoftware.org/isinfo.php)).
 
 To run the tests and the static analysis:
 
@@ -119,7 +121,7 @@ The full guide (in French) covers every setting, the export formats, how live mo
 
 ## License
 
-MyWhisper is free software, released under the [GNU General Public License v3.0](LICENSE) or later. You can use, study, modify and share it. If you distribute a modified version, it must stay open source under the same license, so anyone can check what it does with their voice.
+DoYouCopy is free software, released under the [GNU General Public License v3.0](LICENSE) or later. You can use, study, modify and share it. If you distribute a modified version, it must stay open source under the same license, so anyone can check what it does with their voice.
 
 ## Acknowledgements
 

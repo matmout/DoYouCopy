@@ -10,11 +10,11 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QApplication
 
-from mywhisper.config import Settings
-from mywhisper.core.types import SAMPLE_RATE, Segment, TranscriptionInfo
-from mywhisper.dictation.controller import IDLE, RECORDING, TRANSCRIBING, DictationController
-from mywhisper.gpu.rocm_env import CPU
-from mywhisper.ui.workers import ModelWorker
+from doyoucopy.config import Settings
+from doyoucopy.core.types import SAMPLE_RATE, Segment, TranscriptionInfo
+from doyoucopy.dictation.controller import IDLE, RECORDING, TRANSCRIBING, DictationController
+from doyoucopy.gpu.rocm_env import CPU
+from doyoucopy.ui.workers import ModelWorker
 
 
 class FakeEngine:
@@ -214,7 +214,7 @@ def test_refused_when_app_busy_or_disabled(app, make):
     controller, parts = make(busy=True)
     controller.on_pressed()
     assert controller.state == IDLE and not parts["recorder"].is_recording
-    assert parts["overlay"].calls[-1] == ("message", "MyWhisper est occupé", True)
+    assert parts["overlay"].calls[-1] == ("message", "DoYouCopy est occupé", True)
 
     controller, parts = make(dictation_enabled=False)
     controller.on_pressed()

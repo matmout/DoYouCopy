@@ -1,4 +1,4 @@
-from mywhisper.core.models import DEFAULT_MODEL_KEY, MODELS, get_model
+from doyoucopy.core.models import DEFAULT_MODEL_KEY, MODELS, get_model
 
 
 def test_registry():

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from mywhisper.config import Settings
+from doyoucopy.config import Settings
 
 
 def test_roundtrip(tmp_path: Path):
@@ -29,7 +29,7 @@ def test_unknown_keys_ignored(tmp_path: Path):
 
 
 def test_models_dir_override(monkeypatch, tmp_path: Path):
-    monkeypatch.setenv("MYWHISPER_MODELS_DIR", str(tmp_path))
+    monkeypatch.setenv("DOYOUCOPY_MODELS_DIR", str(tmp_path))
     assert Settings().models_dir == str(tmp_path)
 
 
@@ -90,7 +90,7 @@ def test_out_of_range_choices_fall_back(tmp_path: Path):
 
 
 def test_defaults_are_valid_choices():
-    from mywhisper.config import CHOICES
+    from doyoucopy.config import CHOICES
 
     defaults = Settings()
     for name, allowed in CHOICES.items():
@@ -98,7 +98,7 @@ def test_defaults_are_valid_choices():
 
 
 def test_export_choices_match_the_exporters():
-    from mywhisper import export
-    from mywhisper.config import CHOICES
+    from doyoucopy import export
+    from doyoucopy.config import CHOICES
 
     assert {e.suffix for e in export.exporters()} == CHOICES["default_export"]

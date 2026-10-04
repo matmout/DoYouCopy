@@ -10,10 +10,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication
 
-from mywhisper.config import Settings
-from mywhisper.core.types import SAMPLE_RATE
-from mywhisper.session import SessionController
-from mywhisper.ui.workers import ModelWorker
+from doyoucopy.config import Settings
+from doyoucopy.core.types import SAMPLE_RATE
+from doyoucopy.session import SessionController
+from doyoucopy.ui.workers import ModelWorker
 
 from test_ui import SEGMENTS, FakeEngine, FakeLive, wait_until
 

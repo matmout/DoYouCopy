@@ -1,5 +1,23 @@
 # Notes de version
 
+## 1.1.0
+
+### Nouveau nom : DoYouCopy
+
+L'application s'appelait MyWhisper. Elle devient **DoYouCopy** — *« I talk, you write. »* — avec une nouvelle icône.
+
+- La mise à jour est automatique : l'installeur reprend vos modèles, votre historique (enregistrements audio compris), vos réglages et l'accélération graphique, puis désinstalle l'ancienne version.
+- Le lancement au démarrage de Windows est conservé.
+
+### Sécurité
+
+- Les fichiers du modèle téléchargés ne peuvent plus être écrits en dehors de leur dossier, même si la réponse du serveur était falsifiée.
+- La détection de la carte graphique lance PowerShell depuis le dossier système de Windows uniquement.
+
+### Corrections
+
+- Si le dossier de l'historique change de place, les enregistrements audio sont retrouvés au lieu d'être supprimés.
+
 ## 1.0.0 (4 octobre 2026)
 
 Première version publique. Dictez ou transcrivez dans votre langue, sur votre PC, sans cloud.
@@ -23,5 +41,5 @@ Première version publique. Dictez ou transcrivez dans votre langue, sur votre P
 - L'installeur n'est **pas signé** : Windows SmartScreen affiche « Windows a protégé votre ordinateur ». Cliquez sur **Informations complémentaires**, puis **Exécuter quand même**.
 - L'interface est **en français uniquement** (la reconnaissance vocale, elle, est multilingue).
 - Windows 10 / 11 64 bits uniquement.
-- Pas de mise à jour automatique : les nouvelles versions sont publiées sur la page [Releases](https://github.com/matmout/Mywhisper/releases).
+- Pas de mise à jour automatique : les nouvelles versions sont publiées sur la page [Releases](https://github.com/matmout/DoYouCopy/releases).
 - Pour l'audio de l'ordinateur mixé avec le micro, les voix ne sont pas encore attribuées à des personnes.

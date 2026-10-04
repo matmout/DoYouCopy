@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from mywhisper.core.live import LiveConfig, LiveTranscriber, merge_sentences
-from mywhisper.core.types import SAMPLE_RATE, Segment, TranscribeOptions, TranscriptionInfo, Word
+from doyoucopy.core.live import LiveConfig, LiveTranscriber, merge_sentences
+from doyoucopy.core.types import SAMPLE_RATE, Segment, TranscribeOptions, TranscriptionInfo, Word
 
 
 def speech(seconds: float) -> np.ndarray:

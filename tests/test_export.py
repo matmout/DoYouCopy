@@ -4,14 +4,14 @@ from pathlib import Path
 
 import pytest
 
-from mywhisper import export
-from mywhisper.core.types import Segment, Word
-from mywhisper.export.jsonfmt import JsonExporter
-from mywhisper.export.markdown import MarkdownExporter
-from mywhisper.export.srt import SrtExporter, srt_timestamp
-from mywhisper.export.subtitles import Cue, build_cues, wrap
-from mywhisper.export.txt import TxtExporter
-from mywhisper.export.vtt import VttExporter
+from doyoucopy import export
+from doyoucopy.core.types import Segment, Word
+from doyoucopy.export.jsonfmt import JsonExporter
+from doyoucopy.export.markdown import MarkdownExporter
+from doyoucopy.export.srt import SrtExporter, srt_timestamp
+from doyoucopy.export.subtitles import Cue, build_cues, wrap
+from doyoucopy.export.txt import TxtExporter
+from doyoucopy.export.vtt import VttExporter
 
 SEGMENTS = [Segment(0.0, 2.5, "Bonjour à tous."), Segment(2.5, 3661.0105, "Deuxième phrase.")]
 

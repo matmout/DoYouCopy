@@ -8,11 +8,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mywhisper.config import Settings
-from mywhisper.core.engine import FasterWhisperEngine
-from mywhisper.core.models import MODELS
-from mywhisper.core.types import SAMPLE_RATE, TranscribeOptions
-from mywhisper.gpu.rocm_env import gpu_device
+from doyoucopy.config import Settings
+from doyoucopy.core.engine import FasterWhisperEngine
+from doyoucopy.core.models import MODELS
+from doyoucopy.core.types import SAMPLE_RATE, TranscribeOptions
+from doyoucopy.gpu.rocm_env import gpu_device
 
 pytestmark = [
     pytest.mark.gpu,
@@ -58,7 +58,7 @@ def test_live_transcription_on_gpu(engine, speech_wav):
 
     from faster_whisper.audio import decode_audio
 
-    from mywhisper.core.live import LiveTranscriber
+    from doyoucopy.core.live import LiveTranscriber
 
     engine.load(MODELS["turbo"])
     audio = decode_audio(str(speech_wav))
@@ -102,7 +102,7 @@ def test_batched_inference_and_advanced_options_on_gpu(engine, speech_wav):
 
 
 def test_switch_to_cpu_and_back(engine, speech_wav):
-    from mywhisper.gpu.rocm_env import cpu_device
+    from doyoucopy.gpu.rocm_env import cpu_device
 
     gpu = engine.device
     engine.configure(device=cpu_device("int8"), cpu_threads=4)

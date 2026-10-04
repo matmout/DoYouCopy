@@ -1,8 +1,8 @@
-"""PyInstaller entry point: MyWhisper.exe."""
+"""PyInstaller entry point: DoYouCopy.exe."""
 
 import sys
 
-from mywhisper.app import main
+from doyoucopy.app import main
 
 if __name__ == "__main__":
     sys.exit(main())

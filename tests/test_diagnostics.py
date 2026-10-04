@@ -2,13 +2,13 @@ import logging
 import sys
 import threading
 
-from mywhisper import diagnostics
-from mywhisper.config import Settings
-from mywhisper.runtime.gpu_detect import Adapter
+from doyoucopy import diagnostics
+from doyoucopy.config import Settings
+from doyoucopy.runtime.gpu_detect import Adapter
 
 
 def test_recent_issues_keeps_warnings_and_tracebacks(tmp_path):
-    log_file = tmp_path / "mywhisper.log"
+    log_file = tmp_path / "doyoucopy.log"
     log_file.write_text(
         "2026-10-04 10:00:00,000 INFO a: démarrage\n"
         "2026-10-04 10:00:01,000 ERROR b: Model load failed\n"
@@ -33,7 +33,7 @@ def test_report_describes_the_machine_but_not_the_content(tmp_path):
         hotwords=["Projet Secret"], replacements=[["x", "Dupuis"]], initial_prompt="Réunion confidentielle",
         input_device="Micro de Claire",
     )
-    log_file = tmp_path / "mywhisper.log"
+    log_file = tmp_path / "doyoucopy.log"
     log_file.write_text("2026-10-04 10:00:01,000 ERROR b: boom\n", encoding="utf-8")
     text = diagnostics.report(
         diagnostics.Context(
@@ -69,7 +69,7 @@ def test_setup_logging_writes_a_file_and_catches_uncaught_errors(tmp_path, monke
     monkeypatch.setattr(threading, "excepthook", threading.excepthook)
     try:
         path = diagnostics.setup_logging(tmp_path / "logs", console=False)
-        logging.getLogger("mywhisper.test").warning("attention")
+        logging.getLogger("doyoucopy.test").warning("attention")
         try:
             raise ValueError("inattendue")
         except ValueError:
@@ -77,8 +77,8 @@ def test_setup_logging_writes_a_file_and_catches_uncaught_errors(tmp_path, monke
         for handler in root.handlers:
             handler.flush()
         content = path.read_text(encoding="utf-8")
-        assert "WARNING mywhisper.test: attention" in content
-        assert "CRITICAL mywhisper: Uncaught exception" in content and "ValueError: inattendue" in content
+        assert "WARNING doyoucopy.test: attention" in content
+        assert "CRITICAL doyoucopy: Uncaught exception" in content and "ValueError: inattendue" in content
     finally:
         for handler in root.handlers:
             handler.close()

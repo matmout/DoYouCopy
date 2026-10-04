@@ -1,6 +1,6 @@
 import pytest
 
-from mywhisper.core.textproc import NBSP, apply_replacements, apply_voice_commands, postprocess
+from doyoucopy.core.textproc import NBSP, apply_replacements, apply_voice_commands, postprocess
 
 
 @pytest.mark.parametrize(

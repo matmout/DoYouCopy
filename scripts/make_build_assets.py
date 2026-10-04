@@ -14,8 +14,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from mywhisper import __version__  # noqa: E402
-from mywhisper.ui.app_icon import write_ico  # noqa: E402
+from doyoucopy import __version__  # noqa: E402
+from doyoucopy.ui.app_icon import write_ico  # noqa: E402
 
 
 def write_version_info(path: Path) -> None:
@@ -27,12 +27,12 @@ def write_version_info(path: Path) -> None:
                     fileType=0x1, subtype=0x0, date=(0, 0)),
   kids=[
     StringFileInfo([StringTable('040C04B0', [
-      StringStruct('CompanyName', 'MyWhisper'),
-      StringStruct('FileDescription', 'MyWhisper - transcription vocale locale'),
+      StringStruct('CompanyName', 'DoYouCopy'),
+      StringStruct('FileDescription', 'DoYouCopy - transcription vocale locale'),
       StringStruct('FileVersion', '{__version__}'),
-      StringStruct('InternalName', 'MyWhisper'),
-      StringStruct('OriginalFilename', 'MyWhisper.exe'),
-      StringStruct('ProductName', 'MyWhisper'),
+      StringStruct('InternalName', 'DoYouCopy'),
+      StringStruct('OriginalFilename', 'DoYouCopy.exe'),
+      StringStruct('ProductName', 'DoYouCopy'),
       StringStruct('ProductVersion', '{__version__}')])]),
     VarFileInfo([VarStruct('Translation', [0x040C, 1200])])
   ]
@@ -45,6 +45,6 @@ def write_version_info(path: Path) -> None:
 if __name__ == "__main__":
     app = QApplication([])
     BUILD.mkdir(exist_ok=True)
-    write_ico(BUILD / "mywhisper.ico")
+    write_ico(BUILD / "doyoucopy.ico")
     write_version_info(BUILD / "version_info.txt")
     print(__version__)

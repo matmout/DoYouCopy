@@ -4,11 +4,11 @@ import json
 
 import pytest
 
-from mywhisper.core import model_download
-from mywhisper.core.engine import FasterWhisperEngine, ModelNotAvailableError
-from mywhisper.core.models import MODELS
-from mywhisper.download import DownloadError
-from mywhisper.gpu.rocm_env import CPU
+from doyoucopy.core import model_download
+from doyoucopy.core.engine import FasterWhisperEngine, ModelNotAvailableError
+from doyoucopy.core.models import MODELS
+from doyoucopy.download import DownloadError
+from doyoucopy.gpu.rocm_env import CPU
 
 REPO = "mobiuslabsgmbh/faster-whisper-large-v3-turbo"
 MODEL_BIN = b"\x01" * 2_500_000

@@ -10,11 +10,11 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication
 
-from mywhisper.config import Settings
-from mywhisper.core.types import SAMPLE_RATE, Segment
-from mywhisper.history_controller import HistoryController
-from mywhisper.session import SessionResult
-from mywhisper.storage.history import HistoryStore
+from doyoucopy.config import Settings
+from doyoucopy.core.types import SAMPLE_RATE, Segment
+from doyoucopy.history_controller import HistoryController
+from doyoucopy.session import SessionResult
+from doyoucopy.storage.history import HistoryStore
 
 from test_ui import wait_until
 

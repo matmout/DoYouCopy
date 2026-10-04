@@ -10,8 +10,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication
 
-from mywhisper.desktop import shortcuts
-from mywhisper.desktop.shortcuts import Target
+from doyoucopy.desktop import shortcuts
+from doyoucopy.desktop.shortcuts import Target
 
 windows_only = pytest.mark.skipif(sys.platform != "win32", reason="Windows shortcuts")
 
@@ -24,8 +24,8 @@ def app():
 @pytest.fixture
 def folders(tmp_path, monkeypatch):
     places = {
-        shortcuts.DESKTOP: tmp_path / "Bureau" / "MyWhisper.lnk",
-        shortcuts.START_MENU: tmp_path / "Programs" / "MyWhisper" / "MyWhisper.lnk",
+        shortcuts.DESKTOP: tmp_path / "Bureau" / "DoYouCopy.lnk",
+        shortcuts.START_MENU: tmp_path / "Programs" / "DoYouCopy" / "DoYouCopy.lnk",
     }
     monkeypatch.setattr(shortcuts, "location", places.__getitem__)
     monkeypatch.setattr(shortcuts, "_checkout_icon", lambda: None)  # nothing written to the real profile
@@ -33,17 +33,17 @@ def folders(tmp_path, monkeypatch):
 
 
 def test_command_line():
-    assert Target(Path("C:/A b/MyWhisper.exe")).command_line("--minimized") == '"C:\\A b\\MyWhisper.exe" --minimized'
-    assert Target(Path("py.exe"), "-m mywhisper").command_line() == '"py.exe" -m mywhisper'
+    assert Target(Path("C:/A b/DoYouCopy.exe")).command_line("--minimized") == '"C:\\A b\\DoYouCopy.exe" --minimized'
+    assert Target(Path("py.exe"), "-m doyoucopy").command_line() == '"py.exe" -m doyoucopy'
 
 
 @windows_only
 def test_shortcut_launches_the_app_with_its_identity(app, tmp_path):
-    path = tmp_path / "MyWhisper.lnk"
-    shortcuts.create(path, Target(Path(sys.executable), "-m mywhisper"))
+    path = tmp_path / "DoYouCopy.lnk"
+    shortcuts.create(path, Target(Path(sys.executable), "-m doyoucopy"))
     info = shortcuts.read(path)
-    assert Path(info.program) == Path(sys.executable) and info.arguments == "-m mywhisper"
-    assert info.app_id == shortcuts.APP_ID == "MyWhisper.MyWhisper"
+    assert Path(info.program) == Path(sys.executable) and info.arguments == "-m doyoucopy"
+    assert info.app_id == shortcuts.APP_ID == "DoYouCopy.DoYouCopy"
 
 
 @windows_only
@@ -52,21 +52,21 @@ def test_enable_and_disable_both_kinds(app, folders):
         assert not shortcuts.exists(kind)
         assert shortcuts.set_enabled(kind, True) and shortcuts.exists(kind) and path.is_file()
         assert shortcuts.set_enabled(kind, False) and not path.exists()
-    assert not folders[shortcuts.START_MENU].parent.exists()  # the empty MyWhisper folder goes too
+    assert not folders[shortcuts.START_MENU].parent.exists()  # the empty DoYouCopy folder goes too
 
 
 @windows_only
 def test_start_menu_folder_kept_while_the_uninstaller_link_is_there(app, folders):
     path = folders[shortcuts.START_MENU]
     shortcuts.set_enabled(shortcuts.START_MENU, True)
-    (path.parent / "Désinstaller MyWhisper.lnk").write_bytes(b"")
+    (path.parent / "Désinstaller DoYouCopy.lnk").write_bytes(b"")
     shortcuts.set_enabled(shortcuts.START_MENU, False)
     assert not path.exists() and path.parent.is_dir()
 
 
 def test_settings_checkbox_shows_what_really_happened(app, folders, monkeypatch):
-    from mywhisper.config import Settings
-    from mywhisper.ui import settings_dialog
+    from doyoucopy.config import Settings
+    from doyoucopy.ui import settings_dialog
 
     warnings = []
     monkeypatch.setattr(shortcuts, "available", lambda: True)

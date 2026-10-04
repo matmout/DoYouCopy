@@ -10,12 +10,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication
 
-from mywhisper.config import Settings
-from mywhisper.core.live import LiveUpdate
-from mywhisper.core.types import Segment, TranscriptionInfo, Word
-from mywhisper.gpu.rocm_env import CPU
-from mywhisper.ui.main_window import MainWindow
-from mywhisper.ui.workers import ModelWorker
+from doyoucopy.config import Settings
+from doyoucopy.core.live import LiveUpdate
+from doyoucopy.core.types import Segment, TranscriptionInfo, Word
+from doyoucopy.gpu.rocm_env import CPU
+from doyoucopy.ui.main_window import MainWindow
+from doyoucopy.ui.workers import ModelWorker
 
 SEGMENTS = [Segment(0, 1.5, "Premier segment."), Segment(1.5, 3, "Second segment.")]
 
@@ -257,7 +257,7 @@ def test_widgets_keep_settings_current(app, make_window):
 
 
 def test_vocabulary_dialog_writes_settings(app):
-    from mywhisper.ui.vocabulary_dialog import VocabularyDialog
+    from doyoucopy.ui.vocabulary_dialog import VocabularyDialog
 
     settings = Settings(replacements=[["a", "b"]])
     dialog = VocabularyDialog(settings)
@@ -296,7 +296,7 @@ def test_invalid_hotkey_is_reverted(app, make_window):
 
 
 def test_cpu_notice_banner_and_install_action(app, make_window):
-    from mywhisper.runtime.startup import CpuNotice
+    from doyoucopy.runtime.startup import CpuNotice
 
     window = make_window(FakeEngine())
     requested = []
@@ -328,9 +328,9 @@ def test_model_download_progress_survives_sizes_over_2_gb(app, make_window):
 
 
 def test_runtime_dialog_install_flow(app, monkeypatch):
-    from mywhisper.runtime import install
-    from mywhisper.runtime.gpu_detect import Adapter, Detection
-    from mywhisper.ui import runtime_dialog
+    from doyoucopy.runtime import install
+    from doyoucopy.runtime.gpu_detect import Adapter, Detection
+    from doyoucopy.ui import runtime_dialog
 
     monkeypatch.setattr(runtime_dialog.store, "is_installed", lambda package: False)
     removed = []
@@ -360,7 +360,7 @@ def test_runtime_dialog_install_flow(app, monkeypatch):
 
 @pytest.fixture
 def history_window(app, tmp_path, monkeypatch):
-    from mywhisper.storage.history import HistoryStore
+    from doyoucopy.storage.history import HistoryStore
 
     monkeypatch.setattr(Settings, "save", lambda self, path=None: None)
     store = HistoryStore(tmp_path / "history")

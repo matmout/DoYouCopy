@@ -7,14 +7,14 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from mywhisper.config import Settings
-from mywhisper.core import model_download
-from mywhisper.core.engine import FasterWhisperEngine
-from mywhisper.core.models import MODELS
-from mywhisper.core.types import Segment, TranscribeOptions
-from mywhisper.export.srt import SrtExporter
-from mywhisper.gpu import rocm_env
-from mywhisper.options import DICTATION, FILE, LIVE, live_config, transcribe_options
+from doyoucopy.config import Settings
+from doyoucopy.core import model_download
+from doyoucopy.core.engine import FasterWhisperEngine
+from doyoucopy.core.models import MODELS
+from doyoucopy.core.types import Segment, TranscribeOptions
+from doyoucopy.export.srt import SrtExporter
+from doyoucopy.gpu import rocm_env
+from doyoucopy.options import DICTATION, FILE, LIVE, live_config, transcribe_options
 
 # ---- options ------------------------------------------------------------------
 
@@ -160,8 +160,8 @@ def window(tmp_path):
 
     from PySide6.QtWidgets import QApplication
 
-    from mywhisper.ui.main_window import MainWindow
-    from mywhisper.ui.workers import ModelWorker
+    from doyoucopy.ui.main_window import MainWindow
+    from doyoucopy.ui.workers import ModelWorker
 
     QApplication.instance() or QApplication([])
     Settings.save, original = (lambda self, path=None: None), Settings.save
@@ -237,7 +237,7 @@ def test_default_export_and_subtitle_settings(window, tmp_path, monkeypatch):
 
 
 def test_rocm_cpu_models_are_kept_and_reused(tmp_path, monkeypatch):
-    from mywhisper.core import engine as engine_module
+    from doyoucopy.core import engine as engine_module
 
     kept = []
     monkeypatch.setattr(engine_module, "_rocm_build", lambda: True)

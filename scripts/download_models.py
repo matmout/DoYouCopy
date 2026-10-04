@@ -9,8 +9,8 @@ import sys
 
 from faster_whisper.utils import download_model
 
-from mywhisper.config import Settings
-from mywhisper.core.models import MODELS
+from doyoucopy.config import Settings
+from doyoucopy.core.models import MODELS
 
 
 def main(keys: list[str]) -> int:

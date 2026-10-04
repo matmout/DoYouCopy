@@ -14,13 +14,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication
 
-from mywhisper.app import setup_style
-from mywhisper.config import Settings
-from mywhisper.core.types import Segment, TranscriptionInfo, Word
-from mywhisper.gpu.rocm_env import DeviceConfig
-from mywhisper.ui.main_window import MainWindow
-from mywhisper.ui.widgets.transcript_view import LISTENING_RECORD
-from mywhisper.ui.workers import ModelWorker
+from doyoucopy.app import setup_style
+from doyoucopy.config import Settings
+from doyoucopy.core.types import Segment, TranscriptionInfo, Word
+from doyoucopy.gpu.rocm_env import DeviceConfig
+from doyoucopy.ui.main_window import MainWindow
+from doyoucopy.ui.widgets.transcript_view import LISTENING_RECORD
+from doyoucopy.ui.workers import ModelWorker
 
 GPU = DeviceConfig("cuda", "float16", "GPU · float16")
 
@@ -127,7 +127,7 @@ def main(out: Path) -> int:
         window.live = False
         window.recorder.stop()
         window.waveform.set_active(False)
-        window.segments = [Segment(*s) for s in SENTENCES]
+        window.session.segments = [Segment(*s) for s in SENTENCES]
         window.settings_popover.timestamps_check.setChecked(True)
         window._rerender()
         window._update_controls()

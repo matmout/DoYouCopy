@@ -1,0 +1,132 @@
+"""First-launch model download with a real progress bar.
+
+huggingface_hub reports no usable byte progress, so the files are fetched directly
+from the Hub (HTTP, with resume) into a plain folder that faster-whisper loads as is.
+The Hub's tree API gives each file's size and, for LFS files such as model.bin,
+its SHA-256.
+"""
+
+from __future__ import annotations
+
+import fnmatch
+import json
+import shutil
+import threading
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
+
+from doyoucopy.download import DownloadError, download_file, open_url
+
+HUB = "https://huggingface.co"
+# The files faster-whisper needs (faster_whisper.utils.download_model).
+PATTERNS = ("config.json", "preprocessor_config.json", "model.bin", "tokenizer.json", "vocabulary.*")
+COMPLETE = ".complete"
+
+ModelProgress = Callable[[int, int], None]  # done, total bytes
+
+
+@dataclass(frozen=True)
+class RemoteFile:
+    path: str
+    size: int
+    sha256: str | None
+
+
+def repo_id(model_name: str) -> str:
+    from faster_whisper.utils import _MODELS
+
+    return _MODELS.get(model_name, model_name)
+
+
+def local_dir(models_dir: Path, model_name: str) -> Path:
+    return models_dir / model_name
+
+
+def is_complete(directory: Path) -> bool:
+    return (directory / COMPLETE).exists() and (directory / "model.bin").exists()
+
+
+def list_files(repo: str, opener: Callable = open_url) -> list[RemoteFile]:
+    try:
+        with opener(f"{HUB}/api/models/{repo}/tree/main") as response:
+            entries = json.loads(response.read().decode("utf-8"))
+    except (OSError, ValueError) as exc:
+        raise DownloadError(f"Impossible de joindre huggingface.co : {exc}") from exc
+    files = []
+    for entry in entries:
+        path = entry.get("path", "")
+        # top-level files only: a path from the network must not leave the model folder
+        top_level = "/" not in path and "\\" not in path and path not in ("", ".", "..")
+        if entry.get("type") == "file" and top_level and any(fnmatch.fnmatch(path, p) for p in PATTERNS):
+            lfs = entry.get("lfs") or {}
+            files.append(RemoteFile(path, int(lfs.get("size") or entry.get("size") or 0), lfs.get("oid")))
+    if not any(f.path == "model.bin" for f in files):
+        raise DownloadError(f"Modèle introuvable sur huggingface.co : {repo}")
+    return files
+
+
+def download(
+    model_name: str,
+    models_dir: Path,
+    progress: ModelProgress | None = None,
+    cancel: threading.Event | None = None,
+    opener: Callable = open_url,
+) -> Path:
+    repo = repo_id(model_name)
+    target = local_dir(models_dir, model_name)
+    if is_complete(target):
+        return target
+    files = list_files(repo, opener)
+    total = sum(f.size for f in files)
+    done = 0
+
+    def on_bytes(count: int) -> None:
+        nonlocal done
+        done += count
+        if progress:
+            progress(min(done, total), total)
+
+    for remote in files:
+        download_file(
+            f"{HUB}/{repo}/resolve/main/{remote.path}", target / remote.path, remote.sha256, on_bytes, cancel, opener
+        )
+    (target / COMPLETE).write_text(repo, encoding="utf-8")
+    return target
+
+
+def hf_cache_dir(models_dir: Path, model_name: str) -> Path:
+    """Where scripts/download_models.py (huggingface_hub) put the model."""
+    return models_dir / ("models--" + repo_id(model_name).replace("/", "--"))
+
+
+def installed_size(models_dir: Path, model_name: str) -> int:
+    """Bytes on disk for this model in either layout, 0 when absent."""
+    total = 0
+    plain = local_dir(models_dir, model_name)
+    if is_complete(plain):
+        total += sum(f.stat().st_size for f in plain.rglob("*") if f.is_file())
+    for snapshot in _snapshots(models_dir, model_name):
+        # files are symlinks to content-addressed blobs: stat() follows them
+        total += sum(f.stat().st_size for f in snapshot.iterdir() if f.is_file())
+    return total
+
+
+def _snapshots(models_dir: Path, model_name: str) -> list[Path]:
+    cache = hf_cache_dir(models_dir, model_name)
+    return [m.parent for m in cache.glob("snapshots/*/model.bin") if m.exists()]
+
+
+def discard(models_dir: Path, model_name: str) -> None:
+    """Deletes the model in both layouts, including the shared blobs it points to."""
+    shutil.rmtree(local_dir(models_dir, model_name), ignore_errors=True)
+    cache = hf_cache_dir(models_dir, model_name)
+    root = models_dir.resolve()
+    for link in [*cache.glob("snapshots/*/*"), *cache.glob("blobs/*")]:
+        if not link.is_symlink():
+            continue
+        target = link.resolve()
+        if target != link and root in target.parents:
+            target.unlink(missing_ok=True)
+            target.with_name(target.name + ".refs").unlink(missing_ok=True)
+    shutil.rmtree(cache, ignore_errors=True)

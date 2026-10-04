@@ -6,12 +6,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication
 
-from mywhisper.core.types import Segment, Word
-from mywhisper.ui import theme
-from mywhisper.ui.theme import DARK, LIGHT, contrast_ratio
-from mywhisper.ui.widgets.segmented import SegmentedControl
-from mywhisper.ui.widgets.transcript_view import TranscriptView
-from mywhisper.ui.widgets.waveform import WaveformView
+from doyoucopy.core.types import Segment, Word
+from doyoucopy.ui import theme
+from doyoucopy.ui.theme import DARK, LIGHT, contrast_ratio
+from doyoucopy.ui.widgets.segmented import SegmentedControl
+from doyoucopy.ui.widgets.transcript_view import TranscriptView
+from doyoucopy.ui.widgets.waveform import WaveformView
 
 
 @pytest.fixture(scope="module")

@@ -4,7 +4,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from mywhisper.dictation.hotkey import (
+from doyoucopy.dictation.hotkey import (
     MOD_ALT,
     MOD_CTRL,
     MOD_SHIFT,

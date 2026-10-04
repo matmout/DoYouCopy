@@ -12,16 +12,16 @@ from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QKeyEvent, QTextCharFormat
 from PySide6.QtWidgets import QApplication
 
-from mywhisper.config import Settings
-from mywhisper.core.types import SAMPLE_RATE, Segment, TranscriptionInfo, Word
-from mywhisper.gpu.rocm_env import CPU
-from mywhisper.session import SessionController
-from mywhisper.storage.history import HistoryStore
-from mywhisper.storage.audio import write_audio
-from mywhisper.ui import theme
-from mywhisper.ui.main_window import MainWindow
-from mywhisper.ui.widgets.transcript_view import TranscriptView
-from mywhisper.ui.workers import ModelWorker
+from doyoucopy.config import Settings
+from doyoucopy.core.types import SAMPLE_RATE, Segment, TranscriptionInfo, Word
+from doyoucopy.gpu.rocm_env import CPU
+from doyoucopy.session import SessionController
+from doyoucopy.storage.history import HistoryStore
+from doyoucopy.storage.audio import write_audio
+from doyoucopy.ui import theme
+from doyoucopy.ui.main_window import MainWindow
+from doyoucopy.ui.widgets.transcript_view import TranscriptView
+from doyoucopy.ui.workers import ModelWorker
 
 from test_ui import FakeEngine, wait_until
 

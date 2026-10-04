@@ -1,4 +1,4 @@
-# Roadmap MyWhisper
+# Roadmap DoYouCopy
 
 *Révisée le 4 octobre 2026 pour la sortie de la **version 1.0**, publiée le soir même. Elle remplace la roadmap « 10 fonctionnalités » du même jour, dont six sont livrées.*
 
@@ -41,7 +41,7 @@ Une 1.0 n'est pas la version qui fait tout : c'est celle qui tient sa promesse *
 | # | Tâche | Pourquoi c'est bloquant | Durée |
 |---|---|---|---|
 | 1 | Commiter les correctifs en attente (progression > 2 Go, message de désinstallation) | Ils doivent faire partie de la 1.0 | 5 min |
-| 2 | Passer la version à **1.0.0** (`src/mywhisper/__init__.py`) | L'installeur, l'exécutable et « Ajout/Suppression de programmes » affichent encore 0.2.0 | 5 min |
+| 2 | Passer la version à **1.0.0** (`src/doyoucopy/__init__.py`) | L'installeur, l'exécutable et « Ajout/Suppression de programmes » affichent encore 0.2.0 | 5 min |
 | 3 | Mettre le README à jour : la désinstallation propose aussi de supprimer l'**historique** | La documentation doit dire ce qui est effacé | 5 min |
 | 4 | Recompiler l'installeur 1.0.0, noter son SHA-256 | Livrable de la release | 10 min |
 | 5 | **Recette manuelle** sur l'installeur final (liste ci-dessous) | Dernier filet avant publication | 30 min |
@@ -59,9 +59,9 @@ Une 1.0 n'est pas la version qui fait tout : c'est celle qui tient sa promesse *
 5. Mode Direct, puis audio de l'ordinateur (une vidéo YouTube).
 6. Retrouver la session dans l'historique, corriger un mot, exporter en SRT et en Word.
 7. Fermer la fenêtre : l'application reste dans la zone de notification ; Quitter : le processus disparaît.
-8. Désinstaller en répondant **Non** : les données restent. Réinstaller, désinstaller en répondant **Oui** : `%LOCALAPPDATA%\MyWhisper` et `%APPDATA%\MyWhisper` ont disparu, ainsi que les raccourcis et le lancement au démarrage.
+8. Désinstaller en répondant **Non** : les données restent. Réinstaller, désinstaller en répondant **Oui** : `%LOCALAPPDATA%\DoYouCopy` et `%APPDATA%\DoYouCopy` ont disparu, ainsi que les raccourcis et le lancement au démarrage.
 
-> ⚠️ Avant l'étape 8, copier `%LOCALAPPDATA%\MyWhisper\history` si l'historique actuel doit être conservé.
+> ⚠️ Avant l'étape 8, copier `%LOCALAPPDATA%\DoYouCopy\history` si l'historique actuel doit être conservé.
 
 ### Limites connues, assumées pour la 1.0
 
@@ -97,7 +97,7 @@ Classement par valeur pour les deux profils ci-dessus, effort faible d'abord.
 
 - **Post-traitement par IA locale** (nettoyer, résumer, extraire les actions) via un serveur local Ollama / LM Studio. Utile, mais dépend d'un outil tiers à installer : à réserver aux utilisateurs qui le demandent.
 - **Backend whisper.cpp (Vulkan)** pour les cartes Intel Arc et les AMD non prises en charge par ROCm. À considérer si les retours montrent beaucoup d'utilisateurs en repli processeur.
-- **Ligne de commande** (`mywhisper transcribe *.mp3 --format srt`) : pour les automatisations, une minorité d'utilisateurs.
+- **Ligne de commande** (`doyoucopy transcribe *.mp3 --format srt`) : pour les automatisations, une minorité d'utilisateurs.
 
 ## 4. Ce qui est écarté
 
@@ -108,5 +108,5 @@ Classement par valeur pour les deux profils ci-dessus, effort faible d'abord.
 | Dossier surveillé | Couvert en pratique par la transcription de plusieurs fichiers (1.1). |
 | Écran de premier lancement dédié | L'installeur choisit déjà l'accélération et le modèle se télécharge seul : un assistant de plus ralentirait l'arrivée au premier mot dicté. |
 | Synchronisation cloud, comptes | Contraire à la promesse : rien ne quitte le poste. |
-| Synthèse vocale, application mobile | Autres produits ; la valeur de MyWhisper repose sur le poste de travail. |
+| Synthèse vocale, application mobile | Autres produits ; la valeur de DoYouCopy repose sur le poste de travail. |
 | Modèles distillés supplémentaires | Turbo couvre déjà le besoin de vitesse. |
