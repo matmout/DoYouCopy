@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, Qt, Signal
-from PySide6.QtWidgets import QCheckBox, QComboBox, QFrame, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QCheckBox, QComboBox, QFrame, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from mywhisper.ui import theme
 from mywhisper.ui.widgets.segmented import SegmentedControl
@@ -14,6 +14,7 @@ class SettingsPopover(QWidget):
 
     theme_changed = Signal(str)
     timestamps_changed = Signal(bool)
+    vocabulary_requested = Signal()
 
     def __init__(self, parent: QWidget, microphones: list[str]) -> None:
         super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
@@ -28,6 +29,9 @@ class SettingsPopover(QWidget):
         self.vad_check.setToolTip("Pour les fichiers et les enregistrements. Le mode Direct l'utilise toujours.")
         self.timestamps_check = QCheckBox("Afficher l'horodatage")
         self.timestamps_check.toggled.connect(self.timestamps_changed)
+        self.vocabulary_button = QPushButton("Vocabulaire…")
+        self.vocabulary_button.setToolTip("Mots à favoriser, remplacements, commandes vocales")
+        self.vocabulary_button.clicked.connect(self._request_vocabulary)
         self.mic_combo = QComboBox()
         self.mic_combo.addItem("Micro par défaut", None)
         for name in microphones:
@@ -43,6 +47,7 @@ class SettingsPopover(QWidget):
             ("Transcription", None),
             (None, self.vad_check),
             (None, self.timestamps_check),
+            (None, self.vocabulary_button),
             ("Micro", self.mic_combo),
             ("Thème", self.theme_control),
         ):
@@ -57,6 +62,10 @@ class SettingsPopover(QWidget):
 
         self._fade = QPropertyAnimation(self, b"windowOpacity", self, duration=150)
         self._fade.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+    def _request_vocabulary(self) -> None:
+        self.hide()
+        self.vocabulary_requested.emit()
 
     def popup_below(self, anchor: QWidget) -> None:
         self.adjustSize()

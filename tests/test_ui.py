@@ -228,3 +228,40 @@ def test_copy_as_timestamps_and_markdown(app, make_window):
     assert app.clipboard().text().startswith("*[00:00]* Premier segment.")
     window._copy()
     assert app.clipboard().text() == "Premier segment.\nSecond segment."
+
+
+def test_replacements_and_hotwords_apply_to_transcription(app, make_window):
+    engine = FakeEngine()
+    seen = []
+    transcribe = engine.transcribe
+    engine.transcribe = lambda audio, options: (seen.append(options), transcribe(audio, options))[1]
+    window = make_window(engine)
+    window.settings.replacements = [["segment", "passage"]]
+    window.settings.hotwords = ["ROCm", "Radeon"]
+    wait_until(app, lambda: window.model_ready)
+    window._start_transcription(Path("x.wav"))
+    wait_until(app, lambda: window.idle)
+    assert [s.text for s in window.segments] == ["Premier passage.", "Second passage."]
+    assert seen[0].hotwords == "ROCm, Radeon" and seen[0].word_timestamps
+
+
+def test_widgets_keep_settings_current(app, make_window):
+    window = make_window(FakeEngine())
+    window.language_combo.setCurrentIndex(window.language_combo.findData("en"))
+    window.settings_popover.vad_check.setChecked(False)
+    assert window.settings.language == "en" and window.settings.vad_filter is False
+
+
+def test_vocabulary_dialog_writes_settings(app):
+    from mywhisper.ui.vocabulary_dialog import VocabularyDialog
+
+    settings = Settings(replacements=[["a", "b"]])
+    dialog = VocabularyDialog(settings)
+    dialog.hotwords_edit.setPlainText("ROCm\n\n  Radeon ")
+    dialog._add_row("rock m", "ROCm")
+    dialog._add_row("   ", "ignoré")
+    dialog.voice_check.setChecked(False)
+    dialog.accept()
+    assert settings.hotwords == ["ROCm", "Radeon"]
+    assert settings.replacements == [["a", "b"], ["rock m", "ROCm"]]
+    assert settings.voice_commands is False

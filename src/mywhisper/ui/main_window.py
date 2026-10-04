@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, QTimer
@@ -25,9 +26,11 @@ from mywhisper.audio.recorder import MicRecorder, list_input_devices
 from mywhisper.config import Settings
 from mywhisper.core.live import LiveUpdate, merge_sentences
 from mywhisper.core.models import MODELS
+from mywhisper.core.textproc import apply_replacements
 from mywhisper.core.types import SAMPLE_RATE, AudioSource, Segment, TranscribeOptions
 from mywhisper.export.markdown import MarkdownExporter, timecode
 from mywhisper.ui import theme
+from mywhisper.ui.vocabulary_dialog import VocabularyDialog
 from mywhisper.ui.widgets.record_button import RecordButton
 from mywhisper.ui.widgets.segmented import SegmentedControl
 from mywhisper.ui.widgets.settings_popover import SettingsPopover
@@ -248,6 +251,17 @@ class MainWindow(QMainWindow):
         pop.theme_control.set_value(self.settings.theme)
         pop.theme_changed.connect(self._theme_setting_changed)
         pop.timestamps_changed.connect(lambda _: self._rerender())
+        pop.vocabulary_requested.connect(self._open_vocabulary)
+        # Settings are the single source of truth, kept current for the universal dictation.
+        self.mode_control.changed.connect(lambda v: self._set_setting("mode", v))
+        self.language_combo.currentIndexChanged.connect(
+            lambda _: self._set_setting("language", self.language_combo.currentData())
+        )
+        pop.vad_check.toggled.connect(lambda v: self._set_setting("vad_filter", v))
+        pop.timestamps_check.toggled.connect(lambda v: self._set_setting("show_timestamps", v))
+        pop.mic_combo.currentIndexChanged.connect(
+            lambda _: self._set_setting("input_device", pop.mic_combo.currentData())
+        )
 
         self.toast = Toast(root, bottom_offset=52)
 
@@ -272,8 +286,31 @@ class MainWindow(QMainWindow):
     # ---- theme ---------------------------------------------------------
 
     def _theme_setting_changed(self, setting: str) -> None:
-        self.settings.theme = setting
+        self._set_setting("theme", setting)
         self._theme_changed()
+
+    # ---- settings ------------------------------------------------------
+
+    def _set_setting(self, name: str, value) -> None:
+        setattr(self.settings, name, value)
+        self.save_settings()
+
+    def save_settings(self) -> None:
+        try:
+            self.settings.save()
+        except OSError:
+            log.exception("Could not save settings")
+
+    def _open_vocabulary(self) -> None:
+        dialog = VocabularyDialog(self.settings, self)
+        if dialog.exec():
+            self.save_settings()
+            self._rerender()
+
+    def _apply_vocabulary(self, segment: Segment) -> Segment:
+        if not self.settings.replacements:
+            return segment
+        return replace(segment, text=apply_replacements(segment.text, self.settings.replacements))
 
     def _theme_changed(self) -> None:
         self.tokens = theme.resolve(self.settings.theme)
@@ -374,7 +411,7 @@ class MainWindow(QMainWindow):
         if self.model_control.value() != "turbo":
             message = "Modèle précis : latence plus élevée en direct."
         self._status(message)
-        self.worker.start_live(self.recorder, TranscribeOptions(language=self.language_combo.currentData()))
+        self.worker.start_live(self.recorder, self.transcribe_options())
 
     def _update_level(self) -> None:
         self.waveform.push(self.recorder.level)
@@ -405,14 +442,18 @@ class MainWindow(QMainWindow):
         self._duration = 0.0
         self._update_controls()
         self._status("Analyse de l'audio…" if self.model_ready else "En attente du modèle…")
-        options = TranscribeOptions(
-            language=self.language_combo.currentData(),
-            vad_filter=self.settings_popover.vad_check.isChecked(),
-            word_timestamps=True,  # precise subtitle cuts
+        self.worker.transcribe(audio, self.transcribe_options(word_timestamps=True))  # precise subtitle cuts
+
+    def transcribe_options(self, word_timestamps: bool = False) -> TranscribeOptions:
+        return TranscribeOptions(
+            language=self.settings.language,
+            vad_filter=self.settings.vad_filter,
+            word_timestamps=word_timestamps,
+            hotwords=self.settings.hotwords_prompt(),
         )
-        self.worker.transcribe(audio, options)
 
     def _model_changed(self, key: str) -> None:
+        self._set_setting("model_key", key)
         self.model_ready = False
         self.worker.request_load.emit(key)
 
@@ -485,6 +526,7 @@ class MainWindow(QMainWindow):
         self._status(f"Transcription en cours ({info.language}, {clock(info.duration)})")
 
     def _on_segment(self, segment: Segment) -> None:
+        segment = self._apply_vocabulary(segment)
         self.segments.append(segment)
         self.transcript.append_segment(segment, self.settings_popover.timestamps_check.isChecked())
         if self._duration:
@@ -494,8 +536,9 @@ class MainWindow(QMainWindow):
     def _on_live_update(self, update: LiveUpdate, pass_seconds: float) -> None:
         if not self.live:
             return
-        self.segments.extend(update.committed)
-        self.transcript.live_update(update.committed, update.provisional)
+        committed = [self._apply_vocabulary(s) for s in update.committed]
+        self.segments.extend(committed)
+        self.transcript.live_update(committed, update.provisional)
         if pass_seconds:
             self._status(f"passe {pass_seconds:.2f} s")
         self._update_controls()
@@ -601,16 +644,6 @@ class MainWindow(QMainWindow):
         self.worker.stop_live()
         if self.recorder.is_recording:
             self.recorder.stop()
-        pop = self.settings_popover
-        self.settings.model_key = self.model_control.value()
-        self.settings.mode = self.mode_control.value()
-        self.settings.language = self.language_combo.currentData()
-        self.settings.vad_filter = pop.vad_check.isChecked()
-        self.settings.show_timestamps = pop.timestamps_check.isChecked()
-        self.settings.input_device = pop.mic_combo.currentData()
-        try:
-            self.settings.save()
-        except OSError:
-            log.exception("Could not save settings")
+        self.save_settings()
         self.worker.shutdown()
         super().closeEvent(event)

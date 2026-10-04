@@ -42,6 +42,7 @@ class TranscribeOptions:
     vad_filter: bool = True
     initial_prompt: str | None = None  # preceding text, for context across live windows
     word_timestamps: bool = False
+    hotwords: str | None = None  # user vocabulary, favoured by the decoder
 
 
 @dataclass(frozen=True)

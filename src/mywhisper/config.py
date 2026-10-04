@@ -37,6 +37,21 @@ class Settings:
     device: str = "auto"  # "auto", "gpu" or "cpu"
     allow_download: bool = True
     models_dir: str = field(default_factory=lambda: str(default_models_dir()))
+    # vocabulary
+    hotwords: list[str] = field(default_factory=list)
+    replacements: list[list[str]] = field(default_factory=list)  # [heard, written] pairs
+    voice_commands: bool = True  # spoken punctuation, universal dictation only
+    # universal dictation
+    dictation_enabled: bool = True
+    dictation_hotkey: str = "Ctrl+Shift+Space"
+    dictation_mode: str = "hold"  # "hold" (push-to-talk) or "toggle"
+    dictation_output: str = "paste"  # "paste" into the active app or "clipboard" only
+    dictation_sounds: bool = True
+    close_to_tray: bool = True
+
+    def hotwords_prompt(self) -> str | None:
+        words = [w.strip() for w in self.hotwords if w.strip()]
+        return ", ".join(words) or None
 
     @classmethod
     def load(cls, path: Path | None = None) -> Settings:

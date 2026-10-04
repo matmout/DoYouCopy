@@ -105,6 +105,7 @@ class FasterWhisperEngine:
             vad_filter=options.vad_filter,
             initial_prompt=options.initial_prompt,
             word_timestamps=options.word_timestamps,
+            hotwords=options.hotwords,
             vad_parameters={"min_silence_duration_ms": 500} if options.vad_filter else None,
         )
         result = TranscriptionInfo(info.language, info.language_probability, info.duration)
