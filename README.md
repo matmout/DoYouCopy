@@ -119,6 +119,32 @@ The full guide (in French) covers every setting, the export formats, how live mo
 
 > The interface is currently in French.
 
+## Privacy policy
+
+DoYouCopy has no account, no telemetry and no analytics. Audio and transcripts stay on your PC, in `%LOCALAPPDATA%\DoYouCopy` and `%APPDATA%\DoYouCopy`.
+
+This program will not transfer any information to other networked systems unless specifically requested by the user. The only network connections it makes are downloads, from official sources, with pinned versions and SHA-256 checks:
+
+| When | What | From |
+|---|---|---|
+| End of setup, or *Settings → Hardware* | GPU acceleration for your graphics card | AMD: `repo.radeon.com`, `github.com` (CTranslate2 releases) · NVIDIA: `files.pythonhosted.org` (PyPI) |
+| First use of a model | The Whisper model | `huggingface.co` |
+
+Nothing is uploaded. Turn on *strict offline mode* in the settings to block every download.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
+
+Only binaries built by GitHub Actions from this repository's source code are signed: the installer `DoYouCopy-Setup-<version>.exe` and the programs it contains.
+
+| Role | Members |
+|---|---|
+| Committers and reviewers | [@matmout](https://github.com/matmout) |
+| Approvers | [@matmout](https://github.com/matmout) |
+
+Contributions from outside the team are reviewed by a committer before they are merged.
+
 ## License
 
 DoYouCopy is free software, released under the [GNU General Public License v3.0](LICENSE) or later. You can use, study, modify and share it. If you distribute a modified version, it must stay open source under the same license, so anyone can check what it does with their voice.

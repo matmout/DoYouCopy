@@ -45,6 +45,17 @@ a = Analysis(
 CT2_DLLS = {"ctranslate2.dll", "libiomp5md.dll", "cudnn64_9.dll"}
 a.binaries = [b for b in a.binaries if not (os.path.basename(b[0]).lower() in CT2_DLLS and os.sep not in b[0] and "/" not in b[0])]
 
+
+# sounddevice ships PortAudio for every platform: keep the 64-bit build it loads, not
+# the 32-bit, ARM64 and ASIO ones (ASIO is opt-in and not used here).
+def unused_portaudio(entry):
+    name = os.path.basename(entry[0]).lower()
+    return "portaudio" in name and name != "libportaudio64bit.dll"
+
+
+a.binaries = [b for b in a.binaries if not unused_portaudio(b)]
+a.datas = [d for d in a.datas if not unused_portaudio(d)]
+
 pyz = PYZ(a.pure)
 exe = EXE(
     pyz,

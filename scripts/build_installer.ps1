@@ -81,6 +81,9 @@ if ((Get-FileHash $Ct2Wheel -Algorithm SHA256).Hash -ne $Ct2Sha) { throw "Emprei
 $Ct2Dir = Join-Path $Build "ct2_cpu"
 if (Test-Path $Ct2Dir) { Remove-Item -Recurse -Force $Ct2Dir }
 Invoke-Checked $Py @("-c", "import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])", $Ct2Wheel, $Ct2Dir)
+# NVIDIA cuDNN is proprietary: not shipped. The CPU engine loads without it, and the
+# NVIDIA acceleration downloaded at install time brings its own copy.
+Remove-Item (Join-Path $Ct2Dir "ctranslate2\cudnn64_9.dll")
 
 Write-Host "==> [3/5] Application (PyInstaller)" -ForegroundColor Cyan
 $Version = (& $Py (Join-Path $PSScriptRoot "make_build_assets.py")).Trim()
