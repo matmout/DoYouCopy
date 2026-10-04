@@ -88,7 +88,7 @@ powershell -ExecutionPolicy Bypass -File scripts\install_rocm.ps1
 .\.venv\Scripts\doyoucopy.exe
 ```
 
-It creates `.venv`, installs the ROCm runtime and the ROCm build of CTranslate2, installs DoYouCopy, checks the GPU and downloads the models. To build the installer, use `scripts\build_installer.ps1` (needs [Inno Setup 6](https://jrsoftware.org/isinfo.php)).
+It creates `.venv`, installs the ROCm runtime and the ROCm build of CTranslate2, installs DoYouCopy, checks the GPU and downloads the models. To build the installer, use `scripts\build_installer.ps1` (needs [Inno Setup 6](https://jrsoftware.org/isinfo.php)). For the Microsoft Store package (MSIX), see [docs/STORE.fr.md](docs/STORE.fr.md).
 
 To run the tests and the static analysis:
 
@@ -121,7 +121,7 @@ The full guide (in French) covers every setting, the export formats, how live mo
 
 ## Privacy policy
 
-DoYouCopy has no account, no telemetry and no analytics. Audio and transcripts stay on your PC, in `%LOCALAPPDATA%\DoYouCopy` and `%APPDATA%\DoYouCopy`.
+DoYouCopy has no account, no telemetry and no analytics. Audio and transcripts stay on your PC, in `%LOCALAPPDATA%\DoYouCopy` and `%APPDATA%\DoYouCopy` (Microsoft Store version: Windows keeps them in `%LOCALAPPDATA%\Packages\TrachselLabs.DoYouCopy_7zb5jdp1hfh86`).
 
 This program will not transfer any information to other networked systems unless specifically requested by the user. The only network connections it makes are downloads, from official sources, with pinned versions and SHA-256 checks:
 

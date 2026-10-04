@@ -7,7 +7,7 @@ Order matters and is the main thing to check when auditing startup:
 4. Qt: QApplication, main window, tray icon and the global dictation hotkey.
 
 Command-line switches: --minimized (start in the tray, used by "start with
-Windows"), --setup-runtime (end of the installer: GPU runtime download),
+Windows"; the Microsoft Store package uses its StartupTask instead), --setup-runtime (end of the installer: GPU runtime download),
 --migrate (installer: move the data of MyWhisper, the former name, then exit) and
 --probe <file> (child process that reports whether the GPU is usable).
 """
@@ -76,7 +76,10 @@ def main() -> int:
         window.set_cpu_notice(startup.cpu_notice(choice))
     window.install_runtime_requested.connect(lambda: install_runtime_from_app(window))
     tray = setup_dictation(app, window, settings, worker)
-    if "--minimized" not in args or tray is None:
+    from doyoucopy.dictation import autostart
+
+    minimized = "--minimized" in args or autostart.launched_at_logon()
+    if not minimized or tray is None:
         window.show()
     code = app.exec()
     # Normally already done by MainWindow.closeEvent; covers any other way out.

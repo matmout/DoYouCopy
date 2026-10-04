@@ -9,7 +9,9 @@
        AMD / NVIDIA sont téléchargées à la fin de l'installation, selon la carte.
     3. Génère l'icône et les informations de version, lance PyInstaller.
     4. Vérifie que l'exécutable démarre et charge son moteur (--probe).
-    5. Signe l'exécutable si un certificat est fourni, puis compile l'installeur.
+    5. Signe l'exécutable si un certificat est fourni, puis compile l'installeur
+       (sauf avec -SkipInstaller : le paquet du Microsoft Store est fait par
+       scripts\build_msix.ps1 à partir du même dossier).
 
     Signature (facultative) : -CertFile chemin\vers\cert.pfx (mot de passe dans la
     variable d'environnement DOYOUCOPY_SIGN_PASSWORD) ou -CertThumbprint (certificat
@@ -23,7 +25,8 @@ param(
     [string]$CertFile = "",
     [string]$CertThumbprint = "",
     [string]$TimestampUrl = "http://timestamp.digicert.com",
-    [switch]$SkipPyInstaller
+    [switch]$SkipPyInstaller,
+    [switch]$SkipInstaller  # application only (build\dist\DoYouCopy), e.g. for scripts\build_msix.ps1
 )
 
 $ErrorActionPreference = "Stop"
@@ -109,6 +112,11 @@ if (-not (Test-Path $Probe)) { throw "DoYouCopy.exe --probe n'a rien écrit (cod
 $result = Get-Content $Probe -Raw | ConvertFrom-Json
 if ($result.error) { throw "Le moteur embarqué ne se charge pas : $($result.error)" }
 Write-Host "    CTranslate2 $($result.ct2) chargé, GPU CUDA : $($result.devices)"
+
+if ($SkipInstaller) {
+    Write-Host "Application : $AppDir" -ForegroundColor Green
+    return
+}
 
 Write-Host "==> [5/5] Installeur (Inno Setup)" -ForegroundColor Cyan
 $Iscc = Find-Tool "ISCC.exe" @(

@@ -1,7 +1,9 @@
 # Builds the DoYouCopy installer from the source code, on GitHub-hosted runners only:
 # the binaries signed later (SignPath Foundation) must come from this automated build.
-# Every push and pull request: lint, tests, installer as a downloadable artifact.
-# A v* tag: the installer is also attached to a draft release, to check then publish.
+# Every push and pull request: lint, tests, installer and Microsoft Store package (MSIX)
+# as downloadable artifacts. The MSIX is not signed: it is uploaded to Partner Center
+# by hand, and the Store signs it (docs/STORE.fr.md).
+# A v* tag: both are also attached to a draft release, to check then publish.
 name: Build
 
 on:
@@ -53,6 +55,15 @@ jobs:
           path: dist/DoYouCopy-Setup-*.exe
           if-no-files-found: error
 
+      - name: Microsoft Store package (MSIX)
+        run: powershell -ExecutionPolicy Bypass -File scripts\build_msix.ps1
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: msix
+          path: dist/DoYouCopy-*-x64.msix
+          if-no-files-found: error
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
@@ -63,11 +74,14 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: installer
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: msix
       - name: Draft release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          sha256sum DoYouCopy-Setup-*.exe > SHA256SUMS.txt
-          gh release create "$TAG" DoYouCopy-Setup-*.exe SHA256SUMS.txt \
+          sha256sum DoYouCopy-Setup-*.exe DoYouCopy-*-x64.msix > SHA256SUMS.txt
+          gh release create "$TAG" DoYouCopy-Setup-*.exe DoYouCopy-*-x64.msix SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" --draft --title "DoYouCopy ${TAG#v}" --generate-notes

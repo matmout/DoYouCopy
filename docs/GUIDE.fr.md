@@ -198,6 +198,15 @@ Options de l'exécutable :
 
 L'accélération est installée dans `%LOCALAPPDATA%\DoYouCopy\runtime` (variable `DOYOUCOPY_RUNTIME_DIR` pour un autre emplacement). Le journal de l'application packagée se trouve dans `%LOCALAPPDATA%\DoYouCopy\logs`.
 
+## Construire le paquet Microsoft Store (MSIX)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build_installer.ps1 -SkipInstaller
+powershell -ExecutionPolicy Bypass -File scripts\build_msix.ps1
+```
+
+Prérequis : le Windows SDK (`makeappx`, `makepri`). Le paquet `dist\DoYouCopy-<version>-x64.msix` n'est pas signé : le Store le signe à la soumission. `-DevSign` le signe avec un certificat de test pour l'installer sur sa machine, `-Wack` lance les tests de certification. Identité, différences de comportement et procédure de soumission : [STORE.fr.md](STORE.fr.md).
+
 ## Historique
 
 Chaque transcription (enregistrement, Direct, fichier) est enregistrée automatiquement dans `%LOCALAPPDATA%\DoYouCopy\history`, base SQLite avec recherche plein texte (FTS5). Les longues sessions sont sauvegardées toutes les 30 secondes : un plantage ne fait perdre que les dernières secondes. Le panneau **Historique** (Ctrl+H) liste les sessions : la recherche ignore les accents et trouve les débuts de mots, un clic ouvre une transcription, le clic droit permet de la renommer (F2), de l'ajouter aux favoris ou de la supprimer (Suppr).

@@ -20,6 +20,10 @@ dependencies = [
     "qtawesome>=1.4",  # Phosphor icons
     "sounddevice>=0.5",
     "numpy>=1.26",
+    # Microsoft Store package: "start with Windows" through the StartupTask API
+    "winrt-Windows.ApplicationModel>=3.2; sys_platform == 'win32'",
+    "winrt-Windows.ApplicationModel.Activation>=3.2; sys_platform == 'win32'",
+    "winrt-Windows.Foundation>=3.2; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]

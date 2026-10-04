@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Manifest of the Microsoft Store package (MSIX). scripts/make_build_assets.py fills
+     the {placeholders} from packaging/msix/identity.json (Partner Center: Product
+     identity) and doyoucopy.__version__; scripts/build_msix.ps1 packs the result. -->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap desktop rescap">
+
+  <Identity Name="{Name}" Publisher="{Publisher}" Version="{Version}" ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>DoYouCopy</DisplayName>
+    <PublisherDisplayName>{PublisherDisplayName}</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>Transcription vocale locale</Description>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="fr-FR" />
+  </Resources>
+
+  <Applications>
+    <Application Id="DoYouCopy" Executable="DoYouCopy\DoYouCopy.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="DoYouCopy"
+        Description="Transcription vocale locale"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+      </uap:VisualElements>
+      <Extensions>
+        <!-- "Start with Windows" (settings): enabled by the app, never by default.
+             Launched this way, DoYouCopy starts in the notification area
+             (doyoucopy.dictation.autostart.launched_at_logon). -->
+        <desktop:Extension Category="windows.startupTask" Executable="DoYouCopy\DoYouCopy.exe" EntryPoint="Windows.FullTrustApplication">
+          <desktop:StartupTask TaskId="DoYouCopyStartup" Enabled="false" DisplayName="DoYouCopy" />
+        </desktop:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <Capability Name="internetClient" />
+    <rescap:Capability Name="runFullTrust" />
+    <DeviceCapability Name="microphone" />
+  </Capabilities>
+</Package>
