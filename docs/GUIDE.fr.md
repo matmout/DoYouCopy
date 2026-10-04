@@ -41,7 +41,7 @@ Sans accélération, un bandeau « **Transcription plus lente sur cette machine*
 
 L'installeur n'est pas encore signé : Windows SmartScreen affiche « Windows a protégé votre ordinateur ». Cliquez sur **Informations complémentaires**, puis sur **Exécuter quand même**.
 
-La désinstallation (Paramètres → Applications) supprime l'application, ses raccourcis (y compris ceux créés depuis les réglages) et l'accélération graphique. Elle propose aussi de supprimer les modèles et les réglages.
+La désinstallation (Paramètres → Applications) supprime l'application, ses raccourcis (y compris ceux créés depuis les réglages) et l'accélération graphique. Elle propose aussi de supprimer l'historique (dictées, transcriptions et enregistrements audio), les modèles et les réglages.
 
 ## Installation (développement, depuis les sources)
 

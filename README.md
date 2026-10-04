@@ -68,7 +68,7 @@ For example, on a Radeon RX 7800 XT, 15 s of speech is transcribed in about 1 se
 > [!TIP]
 > The installer isn't code-signed yet, so Windows SmartScreen may say *"Windows protected your PC"*. Click **More info**, then **Run anyway**.
 
-To uninstall, go to **Settings → Apps**. You can choose to keep or remove the downloaded models and settings.
+To uninstall, go to **Settings → Apps**. You can choose to keep or remove your history (transcripts and recordings), the downloaded models and the settings.
 
 <details>
 <summary><b>Install from source (developers)</b></summary>
