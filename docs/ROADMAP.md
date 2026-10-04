@@ -2,6 +2,8 @@
 
 *Rédigée le 4 octobre 2026, à partir de l'état du dépôt après le mode Direct (commit `46f2a42`) et la refonte de l'interface en cours.*
 
+> **Avancement (4 octobre 2026)** : la phase 1 est livrée (n°1, n°2, n°3). Reporté : les profils de vocabulaire du n°2 (un seul vocabulaire pour l'instant) et le découpage de `main_window.py` en contrôleur, à faire avant le n°4.
+
 ## Où en est l'application
 
 MyWhisper fait déjà très bien **une** chose : transformer de l'audio en texte, localement, vite, sur un GPU AMD. Enregistrement micro, import de fichiers, mode Direct, export TXT/SRT, deux modèles, thèmes.
@@ -23,9 +25,9 @@ La roadmap suit ce constat : d'abord faire de MyWhisper un **outil de dictée de
 
 | # | Fonctionnalité | Phase | Impact | Effort | Dépend de |
 |---|---|---|---|---|---|
-| 1 | Dictée universelle (raccourci global + collage dans l'app active) | 1 · Dicter partout | ★★★★★ | M | — |
-| 2 | Vocabulaire personnalisé et commandes vocales | 1 · Dicter partout | ★★★★ | S | — |
-| 3 | Exports enrichis (VTT, JSON, DOCX, Markdown, sous-titres pro) | 1 · Dicter partout | ★★★ | S | — |
+| 1 | ✅ Dictée universelle (raccourci global + collage dans l'app active) | 1 · Dicter partout | ★★★★★ | M | — |
+| 2 | ✅ Vocabulaire personnalisé et commandes vocales | 1 · Dicter partout | ★★★★ | S | — |
+| 3 | ✅ Exports enrichis (VTT, JSON, DOCX, Markdown, sous-titres pro) | 1 · Dicter partout | ★★★ | S | — |
 | 4 | Historique local avec recherche plein texte | 2 · Garder et corriger | ★★★★★ | M | — |
 | 5 | Éditeur synchronisé avec l'audio | 2 · Garder et corriger | ★★★★ | L | 4 |
 | 6 | File d'attente, traitement par lot et ligne de commande | 2 · Garder et corriger | ★★★ | M | 4 (souhaitable) |

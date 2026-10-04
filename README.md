@@ -6,12 +6,14 @@ Transcription vocale **100 % locale et hors ligne** pour Windows : faster-whispe
 |---|---|
 | ![Mode Direct](docs/apercu-direct-sombre.png) | ![Terminé](docs/apercu-termine-clair.png) |
 
+- **Dictée universelle** : maintenez Ctrl+Maj+Espace dans n'importe quelle application, parlez, relâchez : le texte y est collé.
 - Enregistrement depuis le micro (Ctrl+R) ou ouverture / glisser-déposer d'un fichier audio ou vidéo (wav, mp3, m4a, flac, ogg, mp4…).
 - **Mode Direct** (Ctrl+L) : le texte s'affiche pendant que vous parlez.
 - Affichage progressif : chaque segment apparaît dès qu'il est décodé.
 - Choix du modèle : **turbo** (rapide, beam 1) ou **large-v3** (précis, beam 5).
 - Langue forcée ou détection automatique, filtre des silences (Silero VAD).
-- Copie dans le presse-papiers, export **TXT** et **SRT**.
+- **Vocabulaire** : mots à favoriser, remplacements, commandes vocales de ponctuation.
+- Copie (texte brut, horodaté, Markdown) et export **TXT**, **SRT**, **WebVTT**, **Markdown**, **Word** et **JSON**.
 - Repli automatique sur CPU (int8) si le GPU est indisponible.
 
 ## Comment fonctionne l'accélération AMD
@@ -57,14 +59,50 @@ Les modèles sont stockés dans `%LOCALAPPDATA%\MyWhisper\models`. Pour changer 
 | Ctrl+R | Démarrer / arrêter l'enregistrement |
 | Ctrl+L | Démarrer / arrêter le mode Direct |
 | Ctrl+O | Importer un fichier |
-| Ctrl+S | Exporter en TXT (le menu « Exporter » propose aussi le SRT) |
+| Ctrl+S | Exporter en TXT (le menu « Exporter » propose les autres formats) |
+| Ctrl+Maj+Espace | Dictée universelle, depuis n'importe quelle application (modifiable) |
 
-Le grand bouton micro démarre et arrête la capture dans le mode choisi au-dessus (Enregistrement ou Direct). Le bouton **Réglages**, en haut à droite, regroupe le filtre des silences, l'horodatage, le choix du micro et le thème (Système, Sombre ou Clair).
+Le grand bouton micro démarre et arrête la capture dans le mode choisi au-dessus (Enregistrement ou Direct). Le bouton **Réglages**, en haut à droite, regroupe le filtre des silences, l'horodatage, le vocabulaire, la dictée, le choix du micro et le thème (Système, Sombre ou Clair).
 
-Les réglages (modèle, mode, langue, VAD, micro, horodatage, thème) sont enregistrés dans `%APPDATA%\MyWhisper\settings.json`. Autres clés utiles :
+Les réglages sont enregistrés dès qu'ils changent dans `%APPDATA%\MyWhisper\settings.json`. Autres clés utiles :
 
 - `"device"` : `"auto"` (par défaut), `"gpu"` ou `"cpu"` ;
 - `"allow_download"` : `false` interdit tout accès réseau, même si un modèle manque.
+
+## Dictée universelle
+
+MyWhisper reste dans la zone de notification avec le modèle chargé. Depuis n'importe quelle application :
+
+- **Maintenir** (par défaut) : gardez **Ctrl+Maj+Espace** enfoncé pendant que vous parlez, relâchez pour insérer le texte ;
+- **Basculer** : un appui pour démarrer, un second pour arrêter ;
+- **Échap** annule la dictée en cours.
+
+Une pastille en bas de l'écran montre le niveau du micro puis l'état de la transcription. Elle ne prend jamais le focus. Le texte est collé dans la fenêtre active (presse-papiers puis Ctrl+V, l'ancien contenu du presse-papiers est restauré), ou seulement copié si vous choisissez « Copier seulement ».
+
+La section **Dictée** des réglages permet de changer le raccourci (avec Ctrl, Alt, Maj ou Win, ou une touche F seule), le mode, la sortie, le signal sonore, le maintien dans la zone de notification et le démarrage avec Windows. Fermer la fenêtre la réduit dans la zone de notification ; **Quitter** se trouve dans le menu de l'icône.
+
+Limites :
+
+- Windows bloque la saisie simulée vers une fenêtre lancée **en administrateur**. Utilisez alors « Copier seulement », puis Ctrl+V.
+- La dictée attend qu'une transcription ou un mode Direct en cours dans la fenêtre principale soit terminé.
+
+## Vocabulaire
+
+**Réglages → Vocabulaire…** :
+
+- **Mots à favoriser** : noms propres, sigles, jargon. Ils sont transmis au décodeur (`hotwords` de faster-whisper) pour toutes les transcriptions.
+- **Remplacements** : « Entendu → Écrire », sur des mots entiers, sans tenir compte de la casse. Un motif entre barres obliques (`/(\d+) pour ?cent/` → ` %`) est une expression régulière.
+- **Commandes vocales**, dans la dictée universelle : « virgule », « point final », « point d'interrogation », « point d'exclamation », « point-virgule », « deux-points », « points de suspension », « à la ligne », « nouveau paragraphe », « ouvrez / fermez les guillemets », « ouvrez / fermez la parenthèse ». En anglais : *comma, full stop, question mark, new line, new paragraph, open / close quote*… Le mot « point » seul n'est jamais interprété, il est trop courant.
+
+## Exports
+
+| Format | Contenu |
+|---|---|
+| TXT | un segment par ligne |
+| SRT, WebVTT | sous-titres de 2 lignes de 42 caractères au plus, coupés de préférence après la ponctuation, minutés au mot |
+| Markdown | un paragraphe par segment, précédé de son horodatage |
+| Word (.docx) | un paragraphe par segment |
+| JSON | segments et mots avec leurs horodatages |
 
 ## Mode Direct
 
@@ -73,7 +111,7 @@ Le bouton **◉ Direct** transcrit en continu, sans attendre la fin d'un enregis
 - le texte **gris italique** est provisoire : c'est l'hypothèse en cours, qui peut encore changer ;
 - le texte **noir** est validé : il ne bouge plus.
 
-À l'arrêt, le texte est regroupé en phrases. La copie et l'export TXT/SRT fonctionnent comme pour un enregistrement.
+À l'arrêt, le texte est regroupé en phrases. La copie et les exports fonctionnent comme pour un enregistrement.
 
 Whisper ne sait pas traiter un flux audio en continu. MyWhisper re-transcrit donc chaque seconde une fenêtre glissante d'audio, en suivant la méthode LocalAgreement de [whisper_streaming](https://github.com/ufal/whisper_streaming), implémentée dans `core/live.py` :
 
@@ -112,14 +150,24 @@ src/mywhisper/
     models.py         registre des modèles (turbo / precise)
     engine.py         Protocol TranscriptionEngine + FasterWhisperEngine
     live.py           mode Direct : fenêtre glissante + accord LocalAgreement
+    textproc.py       remplacements et commandes vocales (fonctions pures)
   audio/recorder.py   capture micro 16 kHz mono (sounddevice)
-  export/             exporteurs enregistrés par extension (txt, srt)
+  dictation/
+    controller.py     dictée universelle : machine à états raccourci → micro → texte
+    hotkey.py         raccourci global (hook clavier WH_KEYBOARD_LL)
+    inject.py         collage dans la fenêtre active (SendInput), presse-papiers restauré
+    autostart.py      démarrage avec Windows (clé Run de HKCU)
+    sounds.py         signaux sonores synthétisés
+  export/             exporteurs enregistrés par extension (txt, srt, vtt, md, docx, json)
+    subtitles.py      découpage des sous-titres (2 × 42 caractères)
   ui/
     workers.py        ModelWorker : thread unique propriétaire du modèle
     main_window.py    fenêtre : composition et enchaînement des états
+    tray.py           icône de la zone de notification
+    vocabulary_dialog.py  mots à favoriser, remplacements, commandes vocales
     theme.py          tokens de couleurs (sombre / clair), QSS généré, polices Geist
     widgets/          bouton micro, onde, contrôle segmenté, carte transcript,
-                      popover de réglages, notifications
+                      popover de réglages, notifications, pastille de dictée
     resources/fonts/  Geist et Geist Mono (licence OFL)
 scripts/              install_rocm.ps1, check_gpu.py, download_models.py,
                       snapshot_ui.py (captures de l'interface dans chaque état)
@@ -133,9 +181,9 @@ Principes :
 - **Les segments sont émis un par un** depuis le générateur de faster-whisper. C'est ce qui produit l'affichage progressif et permet d'annuler entre deux segments.
 - **Ajouter un modèle** revient à ajouter une entrée `ModelSpec` dans `core/models.py`. **Ajouter un format d'export** revient à créer une classe avec `suffix`, `label` et `render()`, puis à appeler `register()`.
 
-Le mode Direct tourne lui aussi dans `ModelWorker`, sous forme de boucle : le GPU garde un seul utilisateur.
+Le mode Direct et la dictée universelle passent eux aussi par `ModelWorker` : le GPU garde un seul utilisateur. La dictée a ses propres signaux (`dictation_finished`), pour que son texte n'apparaisse pas dans la fenêtre principale.
 
-Pistes d'évolution : raccourci global de dictée avec copie dans le presse-papiers, icône dans la zone de notification, sortie du mode Direct vers une autre application. Toutes se branchent sur `ModelWorker`.
+Prochaines évolutions : voir [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Tests
 
