@@ -44,3 +44,8 @@ tqdm==4.70.1
 typing_extensions==4.16.0
 certifi==2026.7.22
 ctranslate2==4.8.2
+# Microsoft Store (MSIX) build: "start with Windows" through the StartupTask API
+winrt-runtime==3.2.1
+winrt-Windows.ApplicationModel==3.2.1
+winrt-Windows.ApplicationModel.Activation==3.2.1
+winrt-Windows.Foundation==3.2.1

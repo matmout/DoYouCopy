@@ -107,7 +107,11 @@ def location(kind: str) -> Path:
 
 
 def available() -> bool:
-    return sys.platform == "win32"
+    """No .lnk from the Microsoft Store package: it has its own Start menu entry, and
+    its program path changes with every update."""
+    from doyoucopy.desktop import packaging
+
+    return sys.platform == "win32" and not packaging.is_packaged()
 
 
 def exists(kind: str) -> bool:

@@ -39,7 +39,7 @@ from doyoucopy import export
 from doyoucopy.config import Settings
 from doyoucopy.core import model_download
 from doyoucopy.core.models import MODELS
-from doyoucopy.desktop import shortcuts
+from doyoucopy.desktop import packaging, shortcuts
 from doyoucopy.dictation import autostart
 from doyoucopy.dictation.hotkey import parse_hotkey
 from doyoucopy.gpu import rocm_env
@@ -260,9 +260,12 @@ class SettingsDialog(QDialog):
         form.addRow("", startup)
 
         # Not settings: the state is the files themselves, also created by the installer.
-        form = self._section(layout, "Raccourcis")
+        # The Microsoft Store package has its own Start menu entry, and writes no .lnk.
         self.shortcut_checks: dict[str, QCheckBox] = {}
-        for kind, label in ((shortcuts.DESKTOP, "Sur le Bureau"), (shortcuts.START_MENU, "Dans le menu Démarrer")):
+        kinds = () if packaging.is_packaged() else ((shortcuts.DESKTOP, "Sur le Bureau"), (shortcuts.START_MENU, "Dans le menu Démarrer"))
+        if kinds:
+            form = self._section(layout, "Raccourcis")
+        for kind, label in kinds:
             check = QCheckBox(label)
             check.setChecked(shortcuts.exists(kind))
             check.setEnabled(shortcuts.available())
@@ -468,7 +471,7 @@ class SettingsDialog(QDialog):
         form = self._section(layout, "Données")
         if self._history_dir is not None:
             folder = QPushButton("Ouvrir le dossier")
-            folder.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._history_dir))))
+            folder.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(packaging.real_path(self._history_dir)))))
             form.addRow("", folder)
         erase = QPushButton("Tout effacer…")
         erase.clicked.connect(self._confirm_history_clear)
@@ -648,14 +651,17 @@ class SettingsDialog(QDialog):
 
     def _open_logs(self) -> None:
         self._logs_dir.mkdir(parents=True, exist_ok=True)
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._logs_dir)))
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(packaging.real_path(self._logs_dir))))
 
     # ---- general actions -------------------------------------------------
 
     def _autostart_toggled(self, enabled: bool) -> None:
         if not autostart.set_enabled(enabled):
             self._revert(self.autostart_check, enabled)
-            QMessageBox.warning(self, "Démarrage avec Windows", "Impossible de modifier le démarrage automatique.")
+            message = "Impossible de modifier le démarrage automatique."
+            if enabled and packaging.is_packaged():
+                message += " Vérifiez qu'il n'est pas désactivé dans Paramètres Windows > Applications > Démarrage."
+            QMessageBox.warning(self, "Démarrage avec Windows", message)
 
     def _shortcut_toggled(self, kind: str, enabled: bool) -> None:
         if not shortcuts.set_enabled(kind, enabled):

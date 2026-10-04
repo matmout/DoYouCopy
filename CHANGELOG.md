@@ -1,5 +1,12 @@
 # Notes de version
 
+## Prochaine version
+
+### Microsoft Store
+
+- DoYouCopy est aussi distribué sur le Microsoft Store (paquet MSIX signé par Microsoft), en plus de l'installeur.
+- Depuis le Store, « Démarrer avec Windows » passe par les tâches de démarrage de Windows (*Paramètres → Applications → Démarrage*), et l'entrée du menu Démarrer est fournie par le paquet.
+
 ## 1.1.0
 
 ### Nouveau nom : DoYouCopy

@@ -22,6 +22,8 @@ hiddenimports = [
     *collect_submodules("doyoucopy"),
     # what ctranslate2 imports, since the analysis does not see it
     "numpy", "yaml", "asyncio", "queue", "struct", "glob", "shutil", "importlib.resources", "enum", "ctypes",
+    # imported only from the Microsoft Store package (doyoucopy.dictation.autostart)
+    "winrt.windows.applicationmodel", "winrt.windows.applicationmodel.activation", "winrt.windows.foundation",
 ]
 
 excludes = [
