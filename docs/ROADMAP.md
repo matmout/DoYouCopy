@@ -2,7 +2,7 @@
 
 *Rédigée le 4 octobre 2026, à partir de l'état du dépôt après le mode Direct (commit `46f2a42`) et la refonte de l'interface en cours.*
 
-> **Avancement (4 octobre 2026)** : la phase 1 est livrée (n°1, n°2, n°3). Reporté : les profils de vocabulaire du n°2 (un seul vocabulaire pour l'instant) et le découpage de `main_window.py` en contrôleur, à faire avant le n°4.
+> **Avancement (4 octobre 2026)** : la phase 1 est livrée (n°1, n°2, n°3), ainsi que l'historique (n°4), l'éditeur synchronisé (n°5) et la capture de l'audio système (n°7). Côté chantiers transverses : contrôleur de session et journal de diagnostic livrés. Reportés : les profils de vocabulaire du n°2 et, pour le n°7, l'attribution « Moi » / « Les autres » par pistes séparées (aujourd'hui les deux sources sont mixées), qui rejoindra le n°8. La traduction vers l'anglais du n°10 existe déjà dans les réglages.
 
 ## Où en est l'application
 
@@ -28,10 +28,10 @@ La roadmap suit ce constat : d'abord faire de MyWhisper un **outil de dictée de
 | 1 | ✅ Dictée universelle (raccourci global + collage dans l'app active) | 1 · Dicter partout | ★★★★★ | M | — |
 | 2 | ✅ Vocabulaire personnalisé et commandes vocales | 1 · Dicter partout | ★★★★ | S | — |
 | 3 | ✅ Exports enrichis (VTT, JSON, DOCX, Markdown, sous-titres pro) | 1 · Dicter partout | ★★★ | S | — |
-| 4 | Historique local avec recherche plein texte | 2 · Garder et corriger | ★★★★★ | M | — |
-| 5 | Éditeur synchronisé avec l'audio | 2 · Garder et corriger | ★★★★ | L | 4 |
+| 4 | ✅ Historique local avec recherche plein texte | 2 · Garder et corriger | ★★★★★ | M | — |
+| 5 | ✅ Éditeur synchronisé avec l'audio | 2 · Garder et corriger | ★★★★ | L | 4 |
 | 6 | File d'attente, traitement par lot et ligne de commande | 2 · Garder et corriger | ★★★ | M | 4 (souhaitable) |
-| 7 | Capture de l'audio système (réunions, vidéos) | 3 · Réunions | ★★★★ | M | — |
+| 7 | ✅ Capture de l'audio système (réunions, vidéos) | 3 · Réunions | ★★★★ | M | — |
 | 8 | Identification des locuteurs (diarisation) | 3 · Réunions | ★★★★ | L | 7 (souhaitable) |
 | 9 | Post-traitement par IA locale (nettoyage, résumé, actions) | 4 · Intelligence | ★★★★ | M | 4 |
 | 10 | Traduction et sous-titres bilingues | 4 · Intelligence | ★★★ | S → M | 9 (pour les langues autres que l'anglais) |
@@ -222,8 +222,8 @@ Ils n'apparaissent pas comme fonctionnalités, mais conditionnent l'adoption :
 1. ✅ *(livré : PyInstaller + Inno Setup, accélération NVIDIA/AMD téléchargée selon la carte, repli processeur expliqué ; reste la signature)* **Installeur en un clic.** L'installation par script PowerShell exclut la plupart des utilisateurs non développeurs. Cible : un installeur unique (PyInstaller ou Briefcase + Inno Setup/MSIX) qui embarque le runtime ROCm et télécharge le modèle au premier lancement, avec une barre de progression.
 2. **Écran de premier lancement.** Vérification du GPU, choix du micro avec test de niveau, téléchargement du modèle, essai du raccourci de dictée.
 3. **Ouverture à d'autres GPU.** Le Protocol `TranscriptionEngine` permet d'ajouter un backend **whisper.cpp (Vulkan)** qui couvrirait NVIDIA, Intel Arc et les AMD non pris en charge par les wheels ROCm. Cela multiplie l'audience potentielle.
-4. **Découpage de `main_window.py`.** Un contrôleur de session sans dépendance Qt Widgets, prérequis des n°1, 4 et 5, et plus facile à tester.
-5. **Journal de diagnostic** dans `%LOCALAPPDATA%\MyWhisper\logs` et un bouton « Copier les informations de diagnostic ». Aujourd'hui, les erreurs GPU ne sont visibles que dans la console.
+4. ✅ *(livré : `session.py`)* **Découpage de `main_window.py`.** Un contrôleur de session sans dépendance Qt Widgets, prérequis des n°1, 4 et 5, et plus facile à tester.
+5. ✅ *(livré : Réglages > Matériel)* **Journal de diagnostic** dans `%LOCALAPPDATA%\MyWhisper\logs` et un bouton « Copier les informations de diagnostic ». Aujourd'hui, les erreurs GPU ne sont visibles que dans la console.
 
 ## Ce qui a été écarté (pour l'instant)
 

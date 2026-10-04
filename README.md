@@ -35,9 +35,12 @@ Good for meetings, interviews, medical or legal notes, or anything you'd rather 
 
 - **Dictate anywhere.** Hold **Ctrl + Shift + Space** in any app, speak, release: the text is typed where your cursor is.
 - **Live mode.** Text appears while you speak.
+- **Meetings and videos.** Capture what your computer plays (Teams, Zoom, YouTube…), alone or mixed with your microphone.
 - **Files.** Drag in audio or video (wav, mp3, m4a, flac, ogg, mp4…) and watch the transcript appear segment by segment.
 - **Whisper models.** *Light* (small), *Turbo* (large-v3-turbo, default) or *Precise* (large-v3). Automatic language detection, and translation to English.
 - **Custom vocabulary.** Words to favor, replacements, and voice commands for punctuation ("comma", "new line"…).
+- **History.** Every transcript is saved on your PC as you go, with instant full-text search.
+- **Synchronized editor.** Play the audio back, follow the highlighted word, click a word to jump there, fix the text without losing the timestamps. Doubtful words are underlined, and a passage can be transcribed again with the Precise model.
 - **Export** to TXT, SRT, WebVTT, Markdown, Word (.docx) and JSON.
 
 ## Hardware: GPU or CPU
@@ -96,6 +99,10 @@ To run the tests:
 | Ctrl + L | Start / stop live mode |
 | Ctrl + O | Open an audio or video file |
 | Ctrl + S | Export the transcript |
+| Ctrl + H | Show / hide the history |
+| Ctrl + E | Edit the transcript |
+| Ctrl + Space | Play / pause the audio |
+| Ctrl + ← | Go back 5 seconds |
 
 ## Documentation
 

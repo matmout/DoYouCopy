@@ -82,8 +82,12 @@ Les modèles sont stockés dans `%LOCALAPPDATA%\MyWhisper\models`. Pour changer 
 | Ctrl+O | Importer un fichier |
 | Ctrl+S | Exporter en TXT (le menu « Exporter » propose les autres formats) |
 | Ctrl+Maj+Espace | Dictée universelle, depuis n'importe quelle application (modifiable) |
+| Ctrl+H | Afficher / masquer l'historique |
+| Ctrl+E | Modifier la transcription |
+| Ctrl+Espace | Lecture / pause de l'audio |
+| Ctrl+← | Reculer de 5 secondes |
 
-Le grand bouton micro démarre et arrête la capture dans le mode choisi au-dessus (Enregistrement ou Direct). En haut, le choix du modèle (**Léger**, **Turbo**, **Précis**) et de la langue. Le bouton **Réglages** ouvre les réglages rapides : silences, horodatage, vocabulaire, micro, thème. **Tous les réglages…** ouvre la fenêtre complète.
+Le grand bouton micro démarre et arrête la capture dans le mode choisi au-dessus (Enregistrement ou Direct), avec la source choisie à côté : **Micro**, **Ordinateur** (ce qui sort des haut-parleurs : réunion Teams/Zoom, vidéo) ou **Les deux**, mixés. La capture de l'ordinateur utilise le périphérique de sortie par défaut de Windows ; prévenez les participants avant d'enregistrer une réunion. En haut, le choix du modèle (**Léger**, **Turbo**, **Précis**) et de la langue. Le bouton **Réglages** ouvre les réglages rapides : silences, horodatage, vocabulaire, micro, thème. **Tous les réglages…** ouvre la fenêtre complète.
 
 ## Réglages
 
@@ -97,8 +101,9 @@ Chaque changement s'applique tout de suite et est enregistré dans `%APPDATA%\My
 | Dictée | raccourci, mode Maintenir / Basculer, coller ou copier, espace après le texte, commandes vocales, signal sonore |
 | Mode Direct | intervalle entre passes, silence de fin de phrase |
 | Exports | format de Ctrl+S, caractères par ligne et lignes par sous-titre |
+| Historique | enregistrement automatique, dictées conservées ou non, audio des enregistrements conservé (FLAC) et durée de conservation, ouverture du dossier, effacement complet |
 | Modèles | modèle utilisé, modèles téléchargés (taille, suppression), dossier des modèles, mode hors ligne strict |
-| Matériel | **calcul sur la carte graphique ou le processeur**, précision (float16, int8_float16, int8…), threads du processeur, état de la carte et installation de l'accélération |
+| Matériel | **calcul sur la carte graphique ou le processeur**, précision (float16, int8_float16, int8…), threads du processeur, état de la carte et installation de l'accélération, **informations de diagnostic** et dossier des journaux |
 
 Le passage du GPU au processeur (et inversement), la précision, les threads et le dossier des modèles s'appliquent sans redémarrer : le modèle est rechargé après la transcription en cours. Les modèles disponibles :
 
@@ -191,7 +196,21 @@ Options de l'exécutable :
 
 L'accélération est installée dans `%LOCALAPPDATA%\MyWhisper\runtime` (variable `MYWHISPER_RUNTIME_DIR` pour un autre emplacement). Le journal de l'application packagée se trouve dans `%LOCALAPPDATA%\MyWhisper\logs`.
 
+## Historique
+
+Chaque transcription (enregistrement, Direct, fichier) est enregistrée automatiquement dans `%LOCALAPPDATA%\MyWhisper\history`, base SQLite avec recherche plein texte (FTS5). Les longues sessions sont sauvegardées toutes les 30 secondes : un plantage ne fait perdre que les dernières secondes. Le panneau **Historique** (Ctrl+H) liste les sessions : la recherche ignore les accents et trouve les débuts de mots, un clic ouvre une transcription, le clic droit permet de la renommer (F2), de l'ajouter aux favoris ou de la supprimer (Suppr).
+
+L'audio des enregistrements micro et Direct est conservé en FLAC (environ 60 Mo par heure), puis supprimé après 30 jours par défaut ; le texte reste. Les fichiers importés ne sont pas copiés : le lecteur rejoue le fichier d'origine tant qu'il existe. Le texte des dictées universelles n'est conservé que sur option.
+
+## Éditeur synchronisé
+
+Quand l'audio est disponible, un lecteur apparaît sous la transcription : lecture, recul de 5 s, vitesse de 0,5× à 2×. Le mot prononcé est surligné et un clic sur un mot y amène la lecture. Les mots dont le modèle est peu sûr (probabilité inférieure à 50 %, fichiers importés) sont soulignés en rouge.
+
+**Modifier** (Ctrl+E) rend le texte éditable : une ligne par segment, si bien que les horodatages restent justes pour les sous-titres. Recliquez sur **Modifier** pour valider ; les corrections sont enregistrées dans l'historique. Le clic droit sur un passage propose **Retranscrire avec le modèle Précis** : seuls les segments sélectionnés repassent dans large-v3, puis le modèle courant est rechargé.
+
 ## Diagnostic
+
+**Réglages > Matériel > Copier les informations de diagnostic** copie un rapport à joindre à un signalement : Windows, carte graphique et pilote, cartes vues par CTranslate2, versions des bibliothèques, modèles présents, réglages et dernières erreurs du journal. Le rapport ne contient ni transcription, ni vocabulaire, ni contexte. Le journal de l'application est dans `%LOCALAPPDATA%\MyWhisper\logs\mywhisper.log` (bouton **Ouvrir le dossier des journaux**).
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\check_gpu.py
@@ -200,7 +219,7 @@ L'accélération est installée dans `%LOCALAPPDATA%\MyWhisper\runtime` (variabl
 Ce script affiche la version de CTranslate2, la présence du runtime ROCm et le nombre de GPU HIP, puis charge le modèle `tiny` en float16 sur le GPU.
 
 - **`GPU HIP : 0`** : vérifiez le pilote Adrenalin. Vérifiez aussi que `pip show ctranslate2` pointe vers la wheel ROCm, sinon relancez le script d'installation.
-- **La pastille en bas à droite indique « Processeur · int8 »** : le GPU n'a pas pu être initialisé. Le bandeau en donne la raison, et les détails se trouvent dans la console (ou dans le journal de l'application packagée).
+- **La pastille en bas à droite indique « Processeur · int8 »** : le GPU n'a pas pu être initialisé. Le bandeau en donne la raison, et les détails se trouvent dans le journal.
 
 ## Architecture
 
@@ -208,6 +227,11 @@ Ce script affiche la version de CTranslate2, la présence du runtime ROCm et le 
 src/mywhisper/
   app.py              bootstrap : détection GPU (avant Qt), moteur, fenêtre
   config.py           réglages JSON (%APPDATA%\MyWhisper\settings.json)
+  session.py          SessionController : capture, transcription, corrections, résultat courant (sans Qt Widgets)
+  diagnostics.py      journal, exceptions non rattrapées, rapport de diagnostic
+  storage/
+    history.py        historique SQLite + FTS5, rétention de l'audio
+    audio.py          audio conservé en FLAC (PyAV), repli WAV
   gpu/rocm_env.py     choix du device : GPU ROCm (float16) ou CPU (int8)
   core/
     types.py          Segment, ModelSpec, TranscribeOptions, DeviceConfig…
@@ -216,7 +240,10 @@ src/mywhisper/
     live.py           mode Direct : fenêtre glissante + accord LocalAgreement
     textproc.py       remplacements et commandes vocales (fonctions pures)
     model_download.py modèle téléchargé au premier lancement, avec progression
-  audio/recorder.py   capture micro 16 kHz mono (sounddevice)
+  audio/
+    recorder.py       capture micro 16 kHz mono (sounddevice)
+    loopback.py       audio de l'ordinateur : WASAPI loopback (COM via ctypes)
+    sources.py        choix de la source, mixage micro + ordinateur
   runtime/
     gpu_detect.py     détection de la carte (WMI) : NVIDIA, AMD compatible ou processeur
     packages.py       accélérations épinglées (URL, version, SHA-256)
@@ -235,13 +262,15 @@ src/mywhisper/
     subtitles.py      découpage des sous-titres (2 × 42 caractères)
   ui/
     workers.py        ModelWorker : thread unique propriétaire du modèle
-    main_window.py    fenêtre : composition et enchaînement des états
+    main_window.py    fenêtre : composition, affichage de la session, historique, édition
+    history_panel.py  panneau latéral de l'historique
     tray.py           icône de la zone de notification
     settings_dialog.py  fenêtre de réglages complète, par sections
     vocabulary_dialog.py  mots à favoriser, remplacements, commandes vocales
     theme.py          tokens de couleurs (sombre / clair), QSS généré, polices Geist
-    widgets/          bouton micro, onde, contrôle segmenté, carte transcript,
-                      popover de réglages, notifications, pastille de dictée
+    widgets/          bouton micro, onde, contrôle segmenté, carte transcript (mots
+                      synchronisés, mode édition), lecteur audio, popover de réglages,
+                      notifications, pastille de dictée
     resources/fonts/  Geist et Geist Mono (licence OFL)
 scripts/              install_rocm.ps1, check_gpu.py, download_models.py,
                       snapshot_ui.py (captures de l'interface dans chaque état),
@@ -267,4 +296,5 @@ Prochaines évolutions : voir [ROADMAP.md](ROADMAP.md).
 ```powershell
 .\.venv\Scripts\python.exe -m pytest           # tests unitaires
 .\.venv\Scripts\python.exe -m pytest -m gpu    # transcription réelle sur le GPU (synthèse vocale Windows)
+.\.venv\Scripts\python.exe -m pytest -m hardware  # capture réelle de l'audio de l'ordinateur (joue un son)
 ```
