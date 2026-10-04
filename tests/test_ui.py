@@ -46,69 +46,18 @@ class FakeEngine:
         return TranscriptionInfo("fr", 0.99, 3.0), gen()
 
 
-@pytest.fixture(scope="module")
-def app():
-    return QApplication.instance() or QApplication([])
+class FailingLoadEngine(FakeEngine):
+    """The first model load fails (e.g. model missing offline), the retry succeeds."""
 
+    def __init__(self) -> None:
+        super().__init__()
+        self.attempts = 0
 
-@pytest.fixture
-def make_window(app, tmp_path, monkeypatch):
-    monkeypatch.setattr(Settings, "save", lambda self, path=None: None)
-    windows = []
-
-    def factory(engine, **worker_kwargs):
-        window = MainWindow(Settings(), ModelWorker(engine, **worker_kwargs), CPU.description)
-        windows.append(window)
-        return window
-
-    yield factory
-    for window in windows:
-        window.close()
-
-
-def wait_until(app, predicate, timeout_ms=5000):
-    from PySide6.QtCore import QDeadlineTimer
-
-    deadline = QDeadlineTimer(timeout_ms)
-    while not predicate():
-        assert not deadline.hasExpired(), "timeout"
-        app.processEvents()
-
-
-def test_progressive_transcription(app, make_window):
-    window = make_window(FakeEngine())
-    wait_until(app, lambda: window.model_ready)
-    window._start_transcription(Path("x.wav"))
-    assert window.busy and window.cancel_button.isVisibleTo(window)
-    wait_until(app, lambda: not window.busy)
-    assert window.segments == SEGMENTS
-    assert window.text.toPlainText() == "Premier segment.\nSecond segment."
-    assert window.export_button.isEnabled()
-    window.timestamps_check.setChecked(True)
-    assert window.text.toPlainText().startswith("[00:00 → 00:01]  Premier")
-
-
-def test_cancel_stops_after_current_segment(app, make_window):
-    engine = FakeEngine()
-    engine.release.clear()
-    window = make_window(engine)
-    wait_until(app, lambda: window.model_ready)
-    window._start_transcription(Path("x.wav"))
-    window.worker.cancel()
-    engine.release.set()
-    wait_until(app, lambda: not window.busy)
-    assert len(window.segments) <= 1
-    assert "annulée" in window.statusBar().currentMessage()
-
-
-def test_error_resets_ui(app, make_window, monkeypatch):
-    shown = []
-    monkeypatch.setattr("mywhisper.ui.main_window.QMessageBox.warning", lambda *a: shown.append(a[2]))
-    window = make_window(FakeEngine(fail=True))
-    window._start_transcription(Path("x.wav"))
-    wait_until(app, lambda: not window.busy)
-    assert shown and "boom" in shown[0]
-    assert window.record_button.isEnabled()
+    def load(self, spec):
+        self.attempts += 1
+        if self.attempts == 1:
+            raise RuntimeError("cache vide")
+        super().load(spec)
 
 
 class FakeRecorder:
@@ -160,20 +109,111 @@ class FakeLive:
         return self.FLUSH
 
 
+@pytest.fixture(scope="module")
+def app():
+    return QApplication.instance() or QApplication([])
+
+
+@pytest.fixture
+def make_window(app, tmp_path, monkeypatch):
+    monkeypatch.setattr(Settings, "save", lambda self, path=None: None)
+    windows = []
+
+    def factory(engine, **worker_kwargs):
+        window = MainWindow(Settings(), ModelWorker(engine, **worker_kwargs), CPU.description)
+        windows.append(window)
+        return window
+
+    yield factory
+    for window in windows:
+        window.close()
+
+
+def wait_until(app, predicate, timeout_ms=5000):
+    from PySide6.QtCore import QDeadlineTimer
+
+    deadline = QDeadlineTimer(timeout_ms)
+    while not predicate():
+        assert not deadline.hasExpired(), "timeout"
+        app.processEvents()
+
+
+def test_progressive_transcription(app, make_window):
+    window = make_window(FakeEngine())
+    wait_until(app, lambda: window.model_ready)
+    window._start_transcription(Path("x.wav"))
+    assert window.busy and window.cancel_button.isVisibleTo(window)
+    wait_until(app, lambda: not window.busy)
+    assert window.segments == SEGMENTS
+    assert window.transcript.displayed_text() == "Premier segment.\nSecond segment."
+    assert window.export_button.isEnabled()
+    assert not window.transcript.progress.isVisibleTo(window)
+    window.settings_popover.timestamps_check.setChecked(True)
+    assert window.transcript.displayed_text().startswith("00:00   Premier")
+
+
+def test_cancel_stops_after_current_segment(app, make_window):
+    engine = FakeEngine()
+    engine.release.clear()
+    window = make_window(engine)
+    wait_until(app, lambda: window.model_ready)
+    window._start_transcription(Path("x.wav"))
+    window.worker.cancel()
+    engine.release.set()
+    wait_until(app, lambda: not window.busy)
+    assert len(window.segments) <= 1
+    assert "annulée" in window.status_text()
+
+
+def test_error_shows_inline_banner(app, make_window):
+    window = make_window(FakeEngine(fail=True))
+    wait_until(app, lambda: window.model_ready)
+    window._start_transcription(Path("x.wav"))
+    wait_until(app, lambda: not window.busy)
+    banner = window.transcript.banner
+    assert banner.isVisibleTo(window) and "boom" in banner.message.text()
+    assert not banner.action_button.isVisibleTo(window)  # nothing to retry
+    assert window.record_button.isEnabled()
+
+
+def test_model_load_failure_offers_retry(app, make_window):
+    engine = FailingLoadEngine()
+    window = make_window(engine)
+    banner = window.transcript.banner
+    wait_until(app, lambda: banner.isVisibleTo(window))
+    assert "cache vide" in banner.message.text() and banner.action_button.isVisibleTo(window)
+    banner.action_button.click()
+    wait_until(app, lambda: window.model_ready)
+    assert engine.attempts == 2 and not banner.isVisibleTo(window)
+
+
 def test_live_mode(app, make_window):
     window = make_window(FakeEngine(), live_factory=FakeLive)
     window.recorder = FakeRecorder()
     wait_until(app, lambda: window.model_ready)
 
     window._toggle_live()
-    assert window.live and not window.record_button.isEnabled() and not window.open_button.isEnabled()
+    assert window.live and window.record_button.active and window.record_button.isEnabled()
+    assert not window.import_button.isEnabled() and not window.mode_control.isEnabled()
+    assert window.live_chip.isVisibleTo(window)
     wait_until(app, lambda: len(window.segments) == 2)
-    wait_until(app, lambda: window.text.toPlainText() == "Bonjour tout le monde.\nCeci est")
+    wait_until(app, lambda: window.transcript.displayed_text() == "Bonjour tout le monde.\nCeci est")
 
     window._toggle_live()  # stop: final pass, then controls come back
     wait_until(app, lambda: not window.live)
     assert [s.text for s in window.segments] == ["Bonjour tout le monde.", "Ceci est un test."]
-    assert window.text.toPlainText() == "Bonjour tout le monde.\nCeci est un test."
-    assert not window.recorder.is_recording
-    assert window.live_button.isEnabled() and window.record_button.isEnabled()
-    assert window.export_button.isEnabled()
+    assert window.transcript.displayed_text() == "Bonjour tout le monde.\nCeci est un test."
+    assert not window.recorder.is_recording and not window.record_button.active
+    assert window.record_button.isEnabled() and window.mode_control.isEnabled()
+    assert window.export_button.isEnabled() and not window.live_chip.isVisibleTo(window)
+
+
+def test_shortcut_selects_mode_then_captures(app, make_window):
+    window = make_window(FakeEngine(), live_factory=FakeLive)
+    window.recorder = FakeRecorder()
+    wait_until(app, lambda: window.model_ready)
+    window._shortcut_capture("live")
+    assert window.mode_control.value() == "live" and window.live
+    window._shortcut_capture("record")  # while live: stops the session, mode unchanged
+    wait_until(app, lambda: not window.live)
+    assert window.mode_control.value() == "live"

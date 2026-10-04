@@ -31,6 +31,8 @@ class Settings:
     language: str | None = None
     vad_filter: bool = True
     show_timestamps: bool = False
+    mode: str = "record"  # last capture mode: "record" or "live"
+    theme: str = "dark"  # "auto" (follow Windows), "dark" or "light"
     input_device: str | None = None  # device name; indices change between sessions
     device: str = "auto"  # "auto", "gpu" or "cpu"
     allow_download: bool = True

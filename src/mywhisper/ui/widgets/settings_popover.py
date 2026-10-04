@@ -1,0 +1,70 @@
+from __future__ import annotations
+
+from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, Qt, Signal
+from PySide6.QtWidgets import QCheckBox, QComboBox, QFrame, QLabel, QVBoxLayout, QWidget
+
+from mywhisper.ui import theme
+from mywhisper.ui.widgets.segmented import SegmentedControl
+
+THEMES = [("auto", "Système"), ("dark", "Sombre"), ("light", "Clair")]
+
+
+class SettingsPopover(QWidget):
+    """Secondary settings, kept off the main screen: VAD, microphone, timestamps, theme."""
+
+    theme_changed = Signal(str)
+    timestamps_changed = Signal(bool)
+
+    def __init__(self, parent: QWidget, microphones: list[str]) -> None:
+        super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        panel = QFrame(self)
+        panel.setObjectName("Popover")
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(panel)
+
+        self.vad_check = QCheckBox("Ignorer les silences (VAD)")
+        self.vad_check.setToolTip("Pour les fichiers et les enregistrements. Le mode Direct l'utilise toujours.")
+        self.timestamps_check = QCheckBox("Afficher l'horodatage")
+        self.timestamps_check.toggled.connect(self.timestamps_changed)
+        self.mic_combo = QComboBox()
+        self.mic_combo.addItem("Micro par défaut", None)
+        for name in microphones:
+            self.mic_combo.addItem(name, name)
+        self.mic_combo.setMinimumWidth(260)
+        self.theme_control = SegmentedControl(THEMES)
+        self.theme_control.changed.connect(lambda value: self.theme_changed.emit(value))
+
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(18, 16, 18, 18)
+        layout.setSpacing(8)
+        for title, widget in (
+            ("Transcription", None),
+            (None, self.vad_check),
+            (None, self.timestamps_check),
+            ("Micro", self.mic_combo),
+            ("Thème", self.theme_control),
+        ):
+            if title:
+                label = QLabel(title)
+                label.setObjectName("PopoverTitle")
+                if layout.count():
+                    layout.addSpacing(6)
+                layout.addWidget(label)
+            if widget is not None:
+                layout.addWidget(widget)
+
+        self._fade = QPropertyAnimation(self, b"windowOpacity", self, duration=150)
+        self._fade.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+    def popup_below(self, anchor: QWidget) -> None:
+        self.adjustSize()
+        corner = anchor.mapToGlobal(QPoint(anchor.width(), anchor.height() + 6))
+        self.move(corner - QPoint(self.width(), 0))
+        if theme.animations_enabled():
+            self.setWindowOpacity(0.0)
+            self._fade.setStartValue(0.0)
+            self._fade.setEndValue(1.0)
+            self._fade.start()
+        self.show()

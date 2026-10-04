@@ -26,19 +26,25 @@ def main() -> int:
 
     from PySide6.QtWidgets import QApplication
 
+    from mywhisper.ui import theme
     from mywhisper.ui.main_window import MainWindow
     from mywhisper.ui.workers import ModelWorker
 
     app = QApplication(sys.argv)
     app.setApplicationName("MyWhisper")
-    app.setStyle("windowsvista" if "windowsvista" in _styles() else "Fusion")
+    setup_style(app, settings.theme)
     worker = ModelWorker(engine)
     window = MainWindow(settings, worker, device.description)
+    window.setWindowIcon(theme.icon("ph.microphone-fill", window.tokens, "accent"))
     window.show()
     return app.exec()
 
 
-def _styles() -> list[str]:
-    from PySide6.QtWidgets import QStyleFactory
+def setup_style(app, theme_setting: str) -> None:
+    """Fusion + the studio stylesheet: identical rendering whatever the Windows version."""
+    from mywhisper.ui import theme
 
-    return [s.lower() for s in QStyleFactory.keys()]
+    app.setStyle("Fusion")
+    theme.load_fonts()
+    app.setFont(theme.ui_font())
+    theme.apply(app, theme.resolve(theme_setting))

@@ -26,7 +26,7 @@ def gpu_device() -> DeviceConfig | None:
         log.exception("ROCm/HIP initialisation failed")
         return None
     compute_type = "float16" if "float16" in supported else "float32"
-    return DeviceConfig("cuda", compute_type, f"GPU AMD · ROCm · {compute_type}")
+    return DeviceConfig("cuda", compute_type, f"GPU ROCm · {compute_type}")
 
 
 def detect_device(preference: str = "auto") -> DeviceConfig:

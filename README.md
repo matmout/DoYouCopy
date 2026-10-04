@@ -2,6 +2,10 @@
 
 Transcription vocale **100 % locale et hors ligne** pour Windows : faster-whisper (`large-v3-turbo` ou `large-v3`) accéléré par **ROCm** sur GPU AMD Radeon (testé sur RX 7800 XT, gfx1101), avec une fenêtre native PySide6.
 
+| Mode Direct, thème sombre | Transcription terminée, thème clair |
+|---|---|
+| ![Mode Direct](docs/apercu-direct-sombre.png) | ![Terminé](docs/apercu-termine-clair.png) |
+
 - Enregistrement depuis le micro (Ctrl+R) ou ouverture / glisser-déposer d'un fichier audio ou vidéo (wav, mp3, m4a, flac, ogg, mp4…).
 - **Mode Direct** (Ctrl+L) : le texte s'affiche pendant que vous parlez.
 - Affichage progressif : chaque segment apparaît dès qu'il est décodé.
@@ -52,10 +56,12 @@ Les modèles sont stockés dans `%LOCALAPPDATA%\MyWhisper\models`. Pour changer 
 |---|---|
 | Ctrl+R | Démarrer / arrêter l'enregistrement |
 | Ctrl+L | Démarrer / arrêter le mode Direct |
-| Ctrl+O | Ouvrir un fichier |
-| Ctrl+S | Exporter (TXT / SRT) |
+| Ctrl+O | Importer un fichier |
+| Ctrl+S | Exporter en TXT (le menu « Exporter » propose aussi le SRT) |
 
-Les réglages (modèle, langue, VAD, micro, horodatage) sont enregistrés dans `%APPDATA%\MyWhisper\settings.json`. Autres clés utiles :
+Le grand bouton micro démarre et arrête la capture dans le mode choisi au-dessus (Enregistrement ou Direct). Le bouton **Réglages**, en haut à droite, regroupe le filtre des silences, l'horodatage, le choix du micro et le thème (Système, Sombre ou Clair).
+
+Les réglages (modèle, mode, langue, VAD, micro, horodatage, thème) sont enregistrés dans `%APPDATA%\MyWhisper\settings.json`. Autres clés utiles :
 
 - `"device"` : `"auto"` (par défaut), `"gpu"` ou `"cpu"` ;
 - `"allow_download"` : `false` interdit tout accès réseau, même si un modèle manque.
@@ -92,7 +98,7 @@ Durée des passes mesurée sur RX 7800 XT (simulation sur un enregistrement de 4
 Ce script affiche la version de CTranslate2, la présence du runtime ROCm et le nombre de GPU HIP, puis charge le modèle `tiny` en float16 sur le GPU.
 
 - **`GPU HIP : 0`** : vérifiez le pilote Adrenalin. Vérifiez aussi que `pip show ctranslate2` pointe vers la wheel ROCm, sinon relancez le script d'installation.
-- **Le bandeau de l'application indique « CPU · int8 »** : le GPU n'a pas pu être initialisé. Les détails se trouvent dans la console.
+- **La pastille en bas à droite indique « CPU · int8 »** : le GPU n'a pas pu être initialisé. Les détails se trouvent dans la console.
 
 ## Architecture
 
@@ -110,8 +116,13 @@ src/mywhisper/
   export/             exporteurs enregistrés par extension (txt, srt)
   ui/
     workers.py        ModelWorker : thread unique propriétaire du modèle
-    main_window.py    fenêtre PySide6
-scripts/              install_rocm.ps1, check_gpu.py, download_models.py
+    main_window.py    fenêtre : composition et enchaînement des états
+    theme.py          tokens de couleurs (sombre / clair), QSS généré, polices Geist
+    widgets/          bouton micro, onde, contrôle segmenté, carte transcript,
+                      popover de réglages, notifications
+    resources/fonts/  Geist et Geist Mono (licence OFL)
+scripts/              install_rocm.ps1, check_gpu.py, download_models.py,
+                      snapshot_ui.py (captures de l'interface dans chaque état)
 tests/                tests unitaires + test GPU de bout en bout (-m gpu)
 ```
 
