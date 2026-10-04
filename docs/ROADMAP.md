@@ -219,7 +219,7 @@ Phase 4 — Intelligence                                                        
 
 Ils n'apparaissent pas comme fonctionnalités, mais conditionnent l'adoption :
 
-1. **Installeur en un clic.** L'installation par script PowerShell exclut la plupart des utilisateurs non développeurs. Cible : un installeur unique (PyInstaller ou Briefcase + Inno Setup/MSIX) qui embarque le runtime ROCm et télécharge le modèle au premier lancement, avec une barre de progression.
+1. ✅ *(livré : PyInstaller + Inno Setup, accélération NVIDIA/AMD téléchargée selon la carte, repli processeur expliqué ; reste la signature)* **Installeur en un clic.** L'installation par script PowerShell exclut la plupart des utilisateurs non développeurs. Cible : un installeur unique (PyInstaller ou Briefcase + Inno Setup/MSIX) qui embarque le runtime ROCm et télécharge le modèle au premier lancement, avec une barre de progression.
 2. **Écran de premier lancement.** Vérification du GPU, choix du micro avec test de niveau, téléchargement du modèle, essai du raccourci de dictée.
 3. **Ouverture à d'autres GPU.** Le Protocol `TranscriptionEngine` permet d'ajouter un backend **whisper.cpp (Vulkan)** qui couvrirait NVIDIA, Intel Arc et les AMD non pris en charge par les wheels ROCm. Cela multiplie l'audience potentielle.
 4. **Découpage de `main_window.py`.** Un contrôleur de session sans dépendance Qt Widgets, prérequis des n°1, 4 et 5, et plus facile à tester.

@@ -171,6 +171,8 @@ QPushButton:pressed, QToolButton:pressed {{ background: {t.border}; }}
 QPushButton:focus, QToolButton:focus {{ border-color: {t.accent}; }}
 QPushButton:disabled, QToolButton:disabled {{ color: {t.muted}; }}
 QToolButton::menu-indicator {{ image: none; width: 0; }}
+QToolButton[popupMode="1"] {{ padding-right: 18px; }}
+QToolButton::menu-button {{ border: none; background: transparent; width: 16px; }}
 #IconButton {{ padding: 6px; }}
 #LinkButton {{ color: {t.text}; padding: 4px 6px; text-decoration: underline; }}
 #LinkButton:hover {{ background: transparent; color: {t.accent}; }}

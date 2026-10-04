@@ -22,7 +22,28 @@ faster-whisper s'appuie sur [CTranslate2](https://github.com/OpenNMT/CTranslate2
 
 Le GPU AMD apparaît sous le device `"cuda"` de CTranslate2 : c'est le nom historique du backend GPU, qui passe ici par HIP.
 
-## Installation
+## Installation (utilisateurs)
+
+Téléchargez et lancez `MyWhisper-Setup-<version>.exe` (Windows 10 / 11, 64 bits). L'installation se fait dans votre profil, **sans droits administrateur**. À la fin :
+
+1. l'installeur **détecte la carte graphique** et télécharge l'accélération correspondante depuis les sources officielles, avec des versions et des empreintes SHA-256 figées :
+
+   | Carte | Accélération | Téléchargement |
+   |---|---|---|
+   | NVIDIA GeForce GTX 900 et plus récentes, RTX | CUDA 12 (cuBLAS + cuDNN 9) | ~1,2 Go |
+   | AMD Radeon RX 6800 / 6900, RX 7000, RX 9000, Radeon 780M / 880M / 890M | ROCm 7.2 | ~1,2 Go |
+   | Autres (Intel, AMD plus anciennes, aucune carte) | aucune : processeur | — |
+
+   La carte est ensuite testée réellement. En cas d'échec (pilote trop ancien), MyWhisper utilise le processeur et l'explique.
+2. au **premier lancement**, le modèle Turbo (~1,6 Go) se télécharge avec une barre de progression. Le modèle Précis (~3 Go) se télécharge la première fois qu'on le choisit.
+
+Sans accélération, un bandeau « **Transcription plus lente sur cette machine** » en donne la raison. Si une carte compatible est présente, le bouton **Installer l'accélération** télécharge ce qu'il faut, puis redémarre MyWhisper.
+
+L'installeur n'est pas encore signé : Windows SmartScreen affiche « Windows a protégé votre ordinateur ». Cliquez sur **Informations complémentaires**, puis sur **Exécuter quand même**.
+
+La désinstallation (Paramètres → Applications) supprime l'application et l'accélération graphique. Elle propose aussi de supprimer les modèles et les réglages.
+
+## Installation (développement, depuis les sources)
 
 Prérequis :
 
@@ -127,6 +148,31 @@ Durée des passes mesurée sur RX 7800 XT (simulation sur un enregistrement de 4
 | turbo (recommandé) | ~0,4 s | ~1 à 1,5 s après la parole | ~2 s, ou dès une pause |
 | large-v3 | ~0,9 s | ~2 s | ~3 s |
 
+## Construire l'installeur
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scriptsuild_installer.ps1
+```
+
+Prérequis : le `.venv` de développement et [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`). Le script :
+
+1. embarque la wheel CTranslate2 de PyPI (CPU + CUDA), vérifiée par son empreinte ;
+2. construit l'application avec PyInstaller en mode dossier, sans console ni UPX ;
+3. vérifie que l'exécutable charge son moteur (`MyWhisper.exe --probe`) ;
+4. compile `dist\MyWhisper-Setup-<version>.exe` avec Inno Setup (~90 Mo).
+
+Pour signer l'installeur, passez `-CertFile cert.pfx` (mot de passe dans `MYWHISPER_SIGN_PASSWORD`) ou `-CertThumbprint <empreinte>`. Le script utilise alors `signtool` du Windows SDK.
+
+Options de l'exécutable :
+
+| Option | Rôle |
+|---|---|
+| `--setup-runtime` | détecte la carte et installe son accélération (lancée par l'installeur) |
+| `--probe fichier.json` | écrit ce que voit CTranslate2 (nombre de GPU, types de calcul) |
+| `--minimized` | démarre dans la zone de notification (démarrage avec Windows) |
+
+L'accélération est installée dans `%LOCALAPPDATA%\MyWhisperuntime` (variable `MYWHISPER_RUNTIME_DIR` pour un autre emplacement). Le journal de l'application packagée se trouve dans `%LOCALAPPDATA%\MyWhisper\logs`.
+
 ## Diagnostic
 
 ```powershell
@@ -136,7 +182,7 @@ Durée des passes mesurée sur RX 7800 XT (simulation sur un enregistrement de 4
 Ce script affiche la version de CTranslate2, la présence du runtime ROCm et le nombre de GPU HIP, puis charge le modèle `tiny` en float16 sur le GPU.
 
 - **`GPU HIP : 0`** : vérifiez le pilote Adrenalin. Vérifiez aussi que `pip show ctranslate2` pointe vers la wheel ROCm, sinon relancez le script d'installation.
-- **La pastille en bas à droite indique « CPU · int8 »** : le GPU n'a pas pu être initialisé. Les détails se trouvent dans la console.
+- **La pastille en bas à droite indique « Processeur · int8 »** : le GPU n'a pas pu être initialisé. Le bandeau en donne la raison, et les détails se trouvent dans la console (ou dans le journal de l'application packagée).
 
 ## Architecture
 
@@ -151,7 +197,15 @@ src/mywhisper/
     engine.py         Protocol TranscriptionEngine + FasterWhisperEngine
     live.py           mode Direct : fenêtre glissante + accord LocalAgreement
     textproc.py       remplacements et commandes vocales (fonctions pures)
+    model_download.py modèle téléchargé au premier lancement, avec progression
   audio/recorder.py   capture micro 16 kHz mono (sounddevice)
+  runtime/
+    gpu_detect.py     détection de la carte (WMI) : NVIDIA, AMD compatible ou processeur
+    packages.py       accélérations épinglées (URL, version, SHA-256)
+    install.py        téléchargement avec reprise et décompression des wheels
+    store.py          emplacement et activation (sys.path, DLL) avant l'import de ctranslate2
+    startup.py        choix au démarrage, test du GPU (--probe), explication du repli processeur
+  download.py         téléchargements HTTP : progression, reprise, annulation, SHA-256
   dictation/
     controller.py     dictée universelle : machine à états raccourci → micro → texte
     hotkey.py         raccourci global (hook clavier WH_KEYBOARD_LL)
@@ -170,7 +224,10 @@ src/mywhisper/
                       popover de réglages, notifications, pastille de dictée
     resources/fonts/  Geist et Geist Mono (licence OFL)
 scripts/              install_rocm.ps1, check_gpu.py, download_models.py,
-                      snapshot_ui.py (captures de l'interface dans chaque état)
+                      snapshot_ui.py (captures de l'interface dans chaque état),
+                      build_installer.ps1, make_build_assets.py (icône, version)
+packaging/            PyInstaller : mywhisper.spec, launcher.py
+installer/            Inno Setup : mywhisper.iss
 tests/                tests unitaires + test GPU de bout en bout (-m gpu)
 ```
 
