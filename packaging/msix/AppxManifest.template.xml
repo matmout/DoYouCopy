@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Manifest of the Microsoft Store package (MSIX). scripts/make_build_assets.py fills
      the {placeholders} from packaging/msix/identity.json (Partner Center: Product
-     identity) and doyoucopy.__version__; scripts/build_msix.ps1 packs the result. -->
+     identity) and doyoucopy.__version__; scripts/build_msix.ps1 packs the result.
+     ms-resource:AppDescription comes from packaging/msix/Strings/<language>/Resources.resw:
+     one per language of <Resources>, the languages the Store listing can use. -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
@@ -15,7 +17,7 @@
     <DisplayName>DoYouCopy</DisplayName>
     <PublisherDisplayName>{PublisherDisplayName}</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
-    <Description>Transcription vocale locale</Description>
+    <Description>ms-resource:AppDescription</Description>
   </Properties>
 
   <Dependencies>
@@ -23,6 +25,7 @@
   </Dependencies>
 
   <Resources>
+    <Resource Language="en-US" />
     <Resource Language="fr-FR" />
   </Resources>
 
@@ -30,7 +33,7 @@
     <Application Id="DoYouCopy" Executable="DoYouCopy\DoYouCopy.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
         DisplayName="DoYouCopy"
-        Description="Transcription vocale locale"
+        Description="ms-resource:AppDescription"
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">

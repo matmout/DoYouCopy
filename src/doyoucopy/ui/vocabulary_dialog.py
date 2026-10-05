@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from doyoucopy.config import Settings
+from doyoucopy.i18n import tr
 
 
 class VocabularyDialog(QDialog):
@@ -27,41 +28,43 @@ class VocabularyDialog(QDialog):
     def __init__(self, settings: Settings, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.settings = settings
-        self.setWindowTitle("Vocabulaire")
+        self.setWindowTitle(tr("Vocabulaire"))
         self.resize(520, 560)
 
-        hotwords_title = QLabel("Mots à favoriser")
+        hotwords_title = QLabel(tr("Mots à favoriser"))
         hotwords_title.setObjectName("PopoverTitle")
-        hotwords_hint = QLabel("Noms propres, sigles, jargon : un par ligne.")
+        hotwords_hint = QLabel(tr("Noms propres, sigles, jargon : un par ligne."))
         hotwords_hint.setProperty("muted", True)
         self.hotwords_edit = QPlainTextEdit("\n".join(settings.hotwords))
         self.hotwords_edit.setPlaceholderText("ROCm\nCTranslate2\nMme Dupuis")
 
-        replacements_title = QLabel("Remplacements")
+        replacements_title = QLabel(tr("Remplacements"))
         replacements_title.setObjectName("PopoverTitle")
-        replacements_hint = QLabel("Mots entiers, sans tenir compte de la casse. /motif/ pour une expression régulière.")
+        replacements_hint = QLabel(tr("Mots entiers, sans tenir compte de la casse. /motif/ pour une expression régulière."))
         replacements_hint.setProperty("muted", True)
         replacements_hint.setWordWrap(True)
         self.table = QTableWidget(0, 2)
-        self.table.setHorizontalHeaderLabels(["Entendu", "Écrire"])
+        self.table.setHorizontalHeaderLabels([tr("Entendu"), tr("Écrire")])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.verticalHeader().hide()
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         for heard, written in (r for r in settings.replacements if len(r) >= 2):
             self._add_row(heard, written)
-        add_button = QPushButton("Ajouter")
+        add_button = QPushButton(tr("Ajouter"))
         add_button.clicked.connect(lambda: self._add_row("", "", edit=True))
-        remove_button = QPushButton("Supprimer")
+        remove_button = QPushButton(tr("Supprimer"))
         remove_button.clicked.connect(self._remove_rows)
         buttons_row = QHBoxLayout()
         buttons_row.addWidget(add_button)
         buttons_row.addWidget(remove_button)
         buttons_row.addStretch()
 
-        self.voice_check = QCheckBox("Commandes vocales de ponctuation dans la dictée")
+        self.voice_check = QCheckBox(tr("Commandes vocales de ponctuation dans la dictée"))
         self.voice_check.setToolTip(
-            "« virgule », « point final », « point d'interrogation », « à la ligne », "
-            "« nouveau paragraphe », « ouvrez les guillemets »…  (en anglais : comma, full stop, new line…)"
+            tr(
+                "« virgule », « point final », « point d'interrogation », « à la ligne », "
+                "« nouveau paragraphe », « ouvrez les guillemets »…  (en anglais : comma, full stop, new line…)"
+            )
         )
         self.voice_check.setChecked(settings.voice_commands)
 

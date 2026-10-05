@@ -6,6 +6,7 @@ from PySide6.QtCore import QPoint, Qt, QTimer
 from PySide6.QtGui import QCursor, QGuiApplication
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+from doyoucopy.i18n import tr
 from doyoucopy.ui.theme import Tokens
 from doyoucopy.ui.widgets.waveform import WaveformView
 
@@ -41,7 +42,7 @@ class DictationOverlay(QWidget):
         self.waveform = WaveformView(tokens, bars=28)
         self.waveform.setFixedHeight(28)
         self.label = QLabel()
-        self.hint = QLabel("Échap pour annuler")
+        self.hint = QLabel(tr("Échap pour annuler"))
 
         texts = QVBoxLayout()
         texts.setSpacing(0)
@@ -83,8 +84,8 @@ class DictationOverlay(QWidget):
     def show_listening(self, level_source: Callable[[], float]) -> None:
         self._level_source = level_source
         self._style(error=False, dot_token="accent")
-        self.label.setText("Écoute…")
-        self.hint.setText("Échap pour annuler")
+        self.label.setText(tr("Écoute…"))
+        self.hint.setText(tr("Échap pour annuler"))
         self.hint.show()
         self.waveform.set_active(True)
         self.waveform.show()
@@ -94,7 +95,7 @@ class DictationOverlay(QWidget):
     def show_transcribing(self) -> None:
         self._stop_levels()
         self._style(error=False, dot_token="muted")
-        self.label.setText("Transcription…")
+        self.label.setText(tr("Transcription…"))
         self.hint.show()
         self._present(sticky=True)
 

@@ -12,6 +12,7 @@ from doyoucopy.config import Settings
 from doyoucopy.core.textproc import postprocess
 from doyoucopy.core.types import SAMPLE_RATE
 from doyoucopy.dictation import inject, sounds
+from doyoucopy.i18n import tr
 from doyoucopy.options import DICTATION, transcribe_options
 
 log = logging.getLogger(__name__)
@@ -83,14 +84,14 @@ class DictationController(QObject):
         if self.state != IDLE:
             return
         if self.is_app_busy():
-            self._message("DoYouCopy est occupé", error=True)
+            self._message(tr("DoYouCopy est occupé"), error=True)
             return
         self.recorder.device_name = self.settings.input_device
         try:
             self.recorder.start()
         except Exception as exc:
             log.exception("Microphone start failed")
-            self._message(f"Micro indisponible : {exc}", error=True)
+            self._message(tr("Micro indisponible : {error}").format(error=exc), error=True)
             return
         self._set_state(RECORDING)
         self._sound(sounds.START)
@@ -104,7 +105,7 @@ class DictationController(QObject):
         self._sound(sounds.STOP)
         if audio.size < MIN_RECORDING_S * SAMPLE_RATE:
             self._set_state(IDLE)
-            self._message("Trop court")
+            self._message(tr("Trop court"))
             return
         self._job += 1
         self._set_state(TRANSCRIBING)
@@ -119,7 +120,7 @@ class DictationController(QObject):
             return
         self._job += 1  # a result still on its way will be ignored
         self._set_state(IDLE)
-        self._message("Dictée annulée")
+        self._message(tr("Dictée annulée"))
 
     # ---- results -------------------------------------------------------
 
@@ -131,16 +132,16 @@ class DictationController(QObject):
             text, language, self.settings.replacements, voice_commands=self.settings.voice_commands
         )
         if not text:
-            self._message("Rien entendu")
+            self._message(tr("Rien entendu"))
             return
         if self.settings.dictation_trailing_space and not text.endswith(("\n", " ")):
             text += " "
         if self.settings.dictation_output == "paste" and not self.foreground_is_own():
             self.paster.paste(text)
-            self._message("Texte inséré")
+            self._message(tr("Texte inséré"))
         else:
             self.paster.copy(text)
-            self._message("Copié dans le presse-papiers")
+            self._message(tr("Copié dans le presse-papiers"))
         self.dictated.emit(text)
 
     def _on_failed(self, job: int, message: str) -> None:

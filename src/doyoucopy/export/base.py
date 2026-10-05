@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Protocol
 
 from doyoucopy.core.types import Segment
+from doyoucopy.i18n import tr
 
 
 class Exporter(Protocol):
@@ -38,7 +39,7 @@ def export(path: Path, segments: Sequence[Segment], **options) -> None:
     """options: max_chars / max_lines for subtitles; other formats ignore them."""
     exporter = _EXPORTERS.get(path.suffix.lower())
     if exporter is None:
-        raise ValueError(f"Format non pris en charge : {path.suffix or '(aucune extension)'}")
+        raise ValueError(tr("Format non pris en charge : {suffix}").format(suffix=path.suffix or tr("(aucune extension)")))
     data = exporter.render(segments, **options)
     # Through a temporary file: a failed write never leaves a truncated export behind,
     # nor destroys the file it was meant to replace.

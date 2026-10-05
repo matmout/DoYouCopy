@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from doyoucopy.core.types import Segment
 from doyoucopy.export.base import register
 from doyoucopy.export.subtitles import MAX_CHARS, MAX_LINES, build_cues
+from doyoucopy.i18n import N_
 
 
 def srt_timestamp(seconds: float, separator: str = ",") -> str:
@@ -19,7 +20,7 @@ def srt_timestamp(seconds: float, separator: str = ",") -> str:
 
 class SrtExporter:
     suffix = ".srt"
-    label = "Sous-titres SRT"
+    label = N_("Sous-titres SRT")
 
     def render(
         self, segments: Sequence[Segment], max_chars: int = MAX_CHARS, max_lines: int = MAX_LINES, **_options

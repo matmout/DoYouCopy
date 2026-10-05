@@ -9,6 +9,7 @@ from xml.sax.saxutils import escape
 
 from doyoucopy.core.types import Segment
 from doyoucopy.export.base import register
+from doyoucopy.i18n import N_
 
 CONTENT_TYPES = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -32,7 +33,7 @@ PARAGRAPH = '<w:p><w:r><w:t xml:space="preserve">{text}</w:t></w:r></w:p>'
 
 class DocxExporter:
     suffix = ".docx"
-    label = "Document Word"
+    label = N_("Document Word")
 
     def render(self, segments: Sequence[Segment], **_options) -> bytes:
         paragraphs = "".join(PARAGRAPH.format(text=escape(s.text)) for s in segments if s.text)

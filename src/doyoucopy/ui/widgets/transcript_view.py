@@ -20,16 +20,17 @@ from PySide6.QtWidgets import (
 
 from doyoucopy.core.live import SENTENCE_END
 from doyoucopy.core.types import Segment, Word
+from doyoucopy.i18n import N_, tr
 from doyoucopy.session import clock
 from doyoucopy.ui import theme
 from doyoucopy.ui.theme import Tokens
 
 READY = (
-    "Prêt à transcrire",
-    "Cliquez sur le micro ou appuyez sur Ctrl+R.\nVous pouvez aussi déposer un fichier audio ici.",
+    N_("Prêt à transcrire"),
+    N_("Cliquez sur le micro ou appuyez sur Ctrl+R.\nVous pouvez aussi déposer un fichier audio ici."),
 )
-LISTENING_RECORD = ("À l'écoute", "Cliquez à nouveau sur le bouton pour arrêter et transcrire.")
-LISTENING_LIVE = ("À l'écoute", "Le texte apparaîtra dès les premiers mots.")
+LISTENING_RECORD = (N_("À l'écoute"), N_("Cliquez à nouveau sur le bouton pour arrêter et transcrire."))
+LISTENING_LIVE = (N_("À l'écoute"), N_("Le texte apparaîtra dès les premiers mots."))
 READING_CHARS = 72
 LINE_HEIGHT = 155  # percent
 LOW_CONFIDENCE = 0.5  # words below are underlined: probable errors
@@ -214,8 +215,9 @@ class _Empty(QWidget):
         self.icon.setPixmap(theme.icon("ph.microphone", tokens, "muted").pixmap(36, 36))
 
     def set_message(self, title: str, hint: str) -> None:
-        self.title.setText(title)
-        self.hint.setText(hint)
+        """title, hint: French texts (READY, LISTENING_*), translated here."""
+        self.title.setText(tr(title))
+        self.hint.setText(tr(hint))
 
 
 class _Banner(QFrame):
@@ -232,7 +234,7 @@ class _Banner(QFrame):
         self.action_button.clicked.connect(self.action)
         self.close_button = QPushButton()
         self.close_button.setObjectName("IconButton")
-        self.close_button.setToolTip("Fermer")
+        self.close_button.setToolTip(tr("Fermer"))
         self.close_button.clicked.connect(self.hide)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(14, 10, 8, 10)
@@ -324,7 +326,7 @@ class TranscriptView(QFrame):
         self.pages.setCurrentWidget(self.empty)
 
     def show_loading(self, label: str) -> None:
-        self.show_loading_text(f"Chargement de {label}…")
+        self.show_loading_text(tr("Chargement de {model}…").format(model=tr(label)))
 
     def set_font_size(self, points: int) -> None:
         self.editor.setFont(theme.ui_font(points))
@@ -419,7 +421,7 @@ class TranscriptView(QFrame):
         fmt = QTextCharFormat()
         fmt.setUnderlineStyle(QTextCharFormat.UnderlineStyle.WaveUnderline)
         fmt.setUnderlineColor(self._t.qcolor("accent", 0.7))
-        fmt.setToolTip("Mot incertain : à vérifier")
+        fmt.setToolTip(tr("Mot incertain : à vérifier"))
         cursor = QTextCursor(self.editor.document())
         cursor.setPosition(first)
         cursor.setPosition(last, QTextCursor.MoveMode.KeepAnchor)

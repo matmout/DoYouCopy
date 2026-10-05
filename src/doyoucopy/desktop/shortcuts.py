@@ -22,11 +22,13 @@ from ctypes import POINTER, byref, c_void_p, wintypes
 from dataclasses import dataclass
 from pathlib import Path
 
+from doyoucopy.i18n import N_, tr
+
 log = logging.getLogger(__name__)
 
 APP_ID = "DoYouCopy.DoYouCopy"  # same value in app.py and installer/doyoucopy.iss
 NAME = "DoYouCopy"
-DESCRIPTION = "Transcription vocale locale"
+DESCRIPTION = N_("Transcription vocale locale")
 DESKTOP, START_MENU = "desktop", "start_menu"
 
 CSIDL_PROGRAMS = 0x02  # <user>\AppData\Roaming\Microsoft\Windows\Start Menu\Programs
@@ -186,7 +188,7 @@ def create(path: Path, target: Target, app_id: str = APP_ID) -> None:
             link.call(LINK_SET_PATH, str(target.program), argtypes=text)
             link.call(LINK_SET_ARGUMENTS, target.arguments, argtypes=text)
             link.call(LINK_SET_WORKING_DIR, str(target.program.parent), argtypes=text)
-            link.call(LINK_SET_DESCRIPTION, DESCRIPTION, argtypes=text)
+            link.call(LINK_SET_DESCRIPTION, tr(DESCRIPTION), argtypes=text)
             icon = target.icon or target.program
             link.call(LINK_SET_ICON, str(icon), 0, argtypes=(ctypes.c_wchar_p, ctypes.c_int))
             store = link.query(IID_IPropertyStore)

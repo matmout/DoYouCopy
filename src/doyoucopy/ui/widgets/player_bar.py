@@ -8,6 +8,7 @@ from PySide6.QtCore import QSize, Qt, QUrl, Signal
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import QComboBox, QFrame, QHBoxLayout, QLabel, QSlider, QToolButton
 
+from doyoucopy.i18n import decimal, tr
 from doyoucopy.session import clock
 from doyoucopy.ui import theme
 from doyoucopy.ui.theme import Tokens
@@ -35,11 +36,11 @@ class PlayerBar(QFrame):
 
         self.play_button = QToolButton()
         self.play_button.setObjectName("IconButton")
-        self.play_button.setToolTip("Lecture / pause (Ctrl+Espace)")
+        self.play_button.setToolTip(tr("Lecture / pause (Ctrl+Espace)"))
         self.play_button.clicked.connect(self.toggle)
         self.back_button = QToolButton()
         self.back_button.setObjectName("IconButton")
-        self.back_button.setToolTip("Reculer de 5 s (Ctrl+←)")
+        self.back_button.setToolTip(tr("Reculer de 5 s (Ctrl+←)"))
         self.back_button.clicked.connect(self.back)
         self.slider = QSlider(Qt.Orientation.Horizontal)
         self.slider.setRange(0, 0)
@@ -48,9 +49,9 @@ class PlayerBar(QFrame):
         self.time_label.setProperty("mono", True)
         self.speed_combo = QComboBox()
         for speed in SPEEDS:
-            self.speed_combo.addItem(f"{speed:g}×".replace(".", ","), speed)
+            self.speed_combo.addItem(decimal(f"{speed:g}") + "×", speed)
         self.speed_combo.setCurrentIndex(SPEEDS.index(1.0))
-        self.speed_combo.setToolTip("Vitesse de lecture")
+        self.speed_combo.setToolTip(tr("Vitesse de lecture"))
         self.speed_combo.currentIndexChanged.connect(
             lambda _: self.player.setPlaybackRate(self.speed_combo.currentData())
         )
@@ -131,7 +132,7 @@ class PlayerBar(QFrame):
         self.playing_changed.emit(self.playing)
 
     def _on_error(self, _error, message: str) -> None:
-        self.time_label.setText("Audio illisible")
+        self.time_label.setText(tr("Audio illisible"))
         self.time_label.setToolTip(message)
 
     def _update_play_icon(self) -> None:

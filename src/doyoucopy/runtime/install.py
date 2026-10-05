@@ -10,6 +10,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from doyoucopy.download import DownloadCancelled, DownloadError, download_file, open_url
+from doyoucopy.i18n import tr
 from doyoucopy.runtime import store
 from doyoucopy.runtime.packages import RuntimePackage
 
@@ -40,7 +41,11 @@ def install(
     root = root or store.runtime_root()
     if not free_space_ok(package, root):
         needed = package.disk_needed / 1024**3
-        raise DownloadError(f"Espace disque insuffisant : {needed:.0f} Go libres nécessaires sur {root.drive or root}.")
+        raise DownloadError(
+            tr("Espace disque insuffisant : {size} Go libres nécessaires sur {drive}.").format(
+                size=f"{needed:.0f}", drive=root.drive or root
+            )
+        )
     downloads = root / "downloads"
     target = store.install_dir(package, root)
     staging = target.with_name(target.name + ".staging")
@@ -80,7 +85,7 @@ def install(
         staging.replace(target)
     except (OSError, zipfile.BadZipFile) as exc:
         shutil.rmtree(staging, ignore_errors=True)
-        raise DownloadError(f"Installation impossible : {exc}") from exc
+        raise DownloadError(tr("Installation impossible : {error}").format(error=exc)) from exc
     except DownloadCancelled:
         shutil.rmtree(staging, ignore_errors=True)
         raise

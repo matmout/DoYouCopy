@@ -8,11 +8,12 @@ from doyoucopy.core.types import Segment
 from doyoucopy.export.base import register
 from doyoucopy.export.srt import srt_timestamp
 from doyoucopy.export.subtitles import MAX_CHARS, MAX_LINES, build_cues
+from doyoucopy.i18n import N_
 
 
 class VttExporter:
     suffix = ".vtt"
-    label = "Sous-titres WebVTT"
+    label = N_("Sous-titres WebVTT")
 
     def render(
         self, segments: Sequence[Segment], max_chars: int = MAX_CHARS, max_lines: int = MAX_LINES, **_options

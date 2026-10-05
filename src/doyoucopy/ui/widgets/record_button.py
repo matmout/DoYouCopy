@@ -4,6 +4,7 @@ from PySide6.QtCore import QEasingCurve, QPointF, QRectF, QSize, Qt, QVariantAni
 from PySide6.QtGui import QPainter, QPen
 from PySide6.QtWidgets import QAbstractButton
 
+from doyoucopy.i18n import tr
 from doyoucopy.ui import theme
 from doyoucopy.ui.theme import Tokens
 
@@ -60,7 +61,7 @@ class RecordButton(QAbstractButton):
 
     def set_active(self, active: bool) -> None:
         self._active = active
-        self.setAccessibleName("Arrêter" if active else "Démarrer la capture")
+        self.setAccessibleName(tr("Arrêter") if active else tr("Démarrer la capture"))
         if active and self._animate:
             self._pulse_anim.start()
         else:

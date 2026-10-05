@@ -115,9 +115,9 @@ To run the tests and the static analysis:
 
 ## Documentation
 
-The full guide (in French) covers every setting, the export formats, how live mode works, troubleshooting and the architecture: [docs/GUIDE.fr.md](docs/GUIDE.fr.md).
+The full guide covers every setting, the export formats, how live mode works, troubleshooting and the architecture: [docs/GUIDE.en.md](docs/GUIDE.en.md) (English), [docs/GUIDE.fr.md](docs/GUIDE.fr.md) (French).
 
-> The interface is currently in French.
+> The interface is in English and French. It follows the Windows display language; change it in *Settings → General → Interface language*.
 
 ## Privacy policy
 

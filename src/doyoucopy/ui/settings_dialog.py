@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from doyoucopy import export
+from doyoucopy import export, i18n
 from doyoucopy.config import Settings
 from doyoucopy.core import model_download
 from doyoucopy.core.models import MODELS
@@ -43,42 +43,43 @@ from doyoucopy.desktop import packaging, shortcuts
 from doyoucopy.dictation import autostart
 from doyoucopy.dictation.hotkey import parse_hotkey
 from doyoucopy.gpu import rocm_env
+from doyoucopy.i18n import N_, number, tr
 from doyoucopy.ui.widgets.segmented import SegmentedControl
 
 LANGUAGES = [
-    (None, "Détection automatique"),
-    ("fr", "Français"),
-    ("en", "Anglais"),
-    ("de", "Allemand"),
-    ("es", "Espagnol"),
-    ("it", "Italien"),
-    ("pt", "Portugais"),
-    ("nl", "Néerlandais"),
-    ("pl", "Polonais"),
-    ("ru", "Russe"),
-    ("ar", "Arabe"),
-    ("zh", "Chinois"),
-    ("ja", "Japonais"),
+    (None, N_("Détection automatique")),
+    ("fr", N_("Français")),
+    ("en", N_("Anglais")),
+    ("de", N_("Allemand")),
+    ("es", N_("Espagnol")),
+    ("it", N_("Italien")),
+    ("pt", N_("Portugais")),
+    ("nl", N_("Néerlandais")),
+    ("pl", N_("Polonais")),
+    ("ru", N_("Russe")),
+    ("ar", N_("Arabe")),
+    ("zh", N_("Chinois")),
+    ("ja", N_("Japonais")),
 ]
 COMPUTE_LABELS = {
-    "auto": "Automatique",
-    "float16": "float16 : précision complète (recommandé sur GPU)",
-    "bfloat16": "bfloat16 : précision complète",
-    "int8_float16": "int8_float16 : moins de mémoire vidéo",
-    "int8": "int8 : le plus léger (recommandé sur processeur)",
+    "auto": N_("Automatique"),
+    "float16": N_("float16 : précision complète (recommandé sur GPU)"),
+    "bfloat16": N_("bfloat16 : précision complète"),
+    "int8_float16": N_("int8_float16 : moins de mémoire vidéo"),
+    "int8": N_("int8 : le plus léger (recommandé sur processeur)"),
     "int8_float32": "int8_float32",
-    "float32": "float32 : le plus lent, référence",
+    "float32": N_("float32 : le plus lent, référence"),
 }
 PAGES = (
-    "Général",
-    "Transcription",
-    "Silences",
-    "Dictée",
-    "Mode Direct",
-    "Exports",
-    "Historique",
-    "Modèles",
-    "Matériel",
+    N_("Général"),
+    N_("Transcription"),
+    N_("Silences"),
+    N_("Dictée"),
+    N_("Mode Direct"),
+    N_("Exports"),
+    N_("Historique"),
+    N_("Modèles"),
+    N_("Matériel"),
 )
 
 
@@ -88,6 +89,7 @@ class SettingsDialog(QDialog):
     install_runtime_requested = Signal()
     reset_requested = Signal()
     history_clear_requested = Signal()
+    restart_requested = Signal()  # to apply a new interface language
 
     def __init__(
         self,
@@ -110,7 +112,7 @@ class SettingsDialog(QDialog):
         self._microphones = microphones or []
         self._device_description = device_description
         self._hardware_status = hardware_status or (lambda: ("", False))
-        self.setWindowTitle("Réglages")
+        self.setWindowTitle(tr("Réglages"))
         self.resize(780, 600)
         self.setMinimumSize(680, 480)
 
@@ -132,12 +134,12 @@ class SettingsDialog(QDialog):
                 self._hardware,
             ),
         ):
-            self.nav.addItem(title)
-            self.pages.addWidget(self._page(title, build))
+            self.nav.addItem(tr(title))
+            self.pages.addWidget(self._page(tr(title), build))
         self.nav.currentRowChanged.connect(self.pages.setCurrentIndex)
         self.nav.setCurrentRow(0)
 
-        close = QPushButton("Fermer")
+        close = QPushButton(tr("Fermer"))
         close.clicked.connect(self.accept)
         footer = QHBoxLayout()
         footer.addStretch()
@@ -232,28 +234,29 @@ class SettingsDialog(QDialog):
     # ---- pages ---------------------------------------------------------
 
     def _general(self, layout: QVBoxLayout) -> None:
-        form = self._section(layout, "Apparence")
-        themes = SegmentedControl([("auto", "Système"), ("dark", "Sombre"), ("light", "Clair")])
+        form = self._section(layout, tr("Apparence"))
+        themes = SegmentedControl([("auto", tr("Système")), ("dark", tr("Sombre")), ("light", tr("Clair"))])
         themes.set_value(self.settings.theme)
         themes.changed.connect(lambda value: self._set("theme", value))
         self.theme_control = themes
-        form.addRow("Thème", themes)
-        form.addRow("Taille du texte", self._spin("transcript_font_size", 9, 24, 1, " pt"))
-        form.addRow("", self._check("show_timestamps", "Afficher l'horodatage de chaque segment"))
+        form.addRow(tr("Thème"), themes)
+        form.addRow(tr("Taille du texte"), self._spin("transcript_font_size", 9, 24, 1, " pt"))
+        form.addRow("", self._check("show_timestamps", tr("Afficher l'horodatage de chaque segment")))
+        self._interface_language(form)
 
-        form = self._section(layout, "Micro")
+        form = self._section(layout, tr("Micro"))
         mic = QComboBox()
-        mic.addItem("Micro par défaut de Windows", None)
+        mic.addItem(tr("Micro par défaut de Windows"), None)
         for name in self._microphones:
             mic.addItem(name, name)
         mic.setCurrentIndex(max(0, mic.findData(self.settings.input_device)))
         mic.currentIndexChanged.connect(lambda _: self._set("input_device", mic.currentData()))
         self.input_device_combo = mic
-        form.addRow("Entrée", mic)
+        form.addRow(tr("Entrée"), mic)
 
-        form = self._section(layout, "Démarrage")
-        form.addRow("", self._check("close_to_tray", "Rester dans la zone de notification à la fermeture"))
-        startup = QCheckBox("Démarrer avec Windows (dans la zone de notification)")
+        form = self._section(layout, tr("Démarrage"))
+        form.addRow("", self._check("close_to_tray", tr("Rester dans la zone de notification à la fermeture")))
+        startup = QCheckBox(tr("Démarrer avec Windows (dans la zone de notification)"))
         startup.setChecked(autostart.is_enabled())
         startup.toggled.connect(self._autostart_toggled)
         self.autostart_check = startup
@@ -262,9 +265,9 @@ class SettingsDialog(QDialog):
         # Not settings: the state is the files themselves, also created by the installer.
         # The Microsoft Store package has its own Start menu entry, and writes no .lnk.
         self.shortcut_checks: dict[str, QCheckBox] = {}
-        kinds = () if packaging.is_packaged() else ((shortcuts.DESKTOP, "Sur le Bureau"), (shortcuts.START_MENU, "Dans le menu Démarrer"))
+        kinds = () if packaging.is_packaged() else ((shortcuts.DESKTOP, tr("Sur le Bureau")), (shortcuts.START_MENU, tr("Dans le menu Démarrer")))
         if kinds:
-            form = self._section(layout, "Raccourcis")
+            form = self._section(layout, tr("Raccourcis"))
         for kind, label in kinds:
             check = QCheckBox(label)
             check.setChecked(shortcuts.exists(kind))
@@ -274,67 +277,88 @@ class SettingsDialog(QDialog):
             self.shortcut_checks[kind] = check
             form.addRow("", check)
 
-        reset = QPushButton("Rétablir les réglages par défaut…")
+        reset = QPushButton(tr("Rétablir les réglages par défaut…"))
         reset.clicked.connect(self._confirm_reset)
         layout.addSpacing(16)
         layout.addWidget(reset, alignment=Qt.AlignmentFlag.AlignLeft)
 
+    def _interface_language(self, form: QFormLayout) -> None:
+        """Applied at the next start: every window would have to be rebuilt otherwise."""
+        # Each language in its own name, so that it can be found whatever the current one.
+        combo = self._combo("ui_language", [("auto", tr("Système")), *i18n.CHOICES[1:]])
+        form.addRow(tr("Langue de l'interface"), combo)
+        self.restart_hint = self._hint(tr("La nouvelle langue s'appliquera au prochain démarrage de DoYouCopy."))
+        restart = QPushButton(tr("Redémarrer maintenant"))
+        restart.clicked.connect(self.restart_requested)
+        self.restart_button = restart
+        form.addRow("", self.restart_hint)
+        form.addRow("", restart)
+        combo.currentIndexChanged.connect(lambda _: self._update_restart_hint())
+        self._update_restart_hint()
+
+    def _update_restart_hint(self) -> None:
+        pending = i18n.resolve(self.settings.ui_language) != i18n.language()
+        self.restart_hint.setVisible(pending)
+        self.restart_button.setVisible(pending)
+
     def _transcription(self, layout: QVBoxLayout) -> None:
-        form = self._section(layout, "Langue")
-        form.addRow("Langue parlée", self._combo("language", LANGUAGES))
+        form = self._section(layout, tr("Langue"))
+        form.addRow(tr("Langue parlée"), self._combo("language", [(code, tr(name)) for code, name in LANGUAGES]))
         form.addRow(
             "",
             self._check(
                 "multilingual",
-                "Plusieurs langues dans le même audio",
-                "La langue est redétectée à chaque segment (réunions bilingues, citations).",
+                tr("Plusieurs langues dans le même audio"),
+                tr("La langue est redétectée à chaque segment (réunions bilingues, citations)."),
             ),
         )
-        task = self._combo("task", [("transcribe", "Transcrire dans la langue parlée"), ("translate", "Traduire en anglais")])
-        form.addRow("Résultat", task)
+        task = self._combo("task", [("transcribe", tr("Transcrire dans la langue parlée")), ("translate", tr("Traduire en anglais"))])
+        form.addRow(tr("Résultat"), task)
         self.translate_warning = self._hint(
-            "Le modèle Turbo n'a pas été entraîné pour traduire : choisissez le modèle Précis.", warning=True
+            tr("Le modèle Turbo n'a pas été entraîné pour traduire : choisissez le modèle Précis."), warning=True
         )
         form.addRow("", self.translate_warning)
         task.currentIndexChanged.connect(lambda _: self._update_translate_warning())
         self._update_translate_warning()
 
-        form = self._section(layout, "Contexte et vocabulaire")
+        form = self._section(layout, tr("Contexte et vocabulaire"))
         prompt = QPlainTextEdit(self.settings.initial_prompt)
-        prompt.setPlaceholderText("Ex. : Réunion de l'équipe produit sur DoYouCopy, avec Claire et Karim.")
+        prompt.setPlaceholderText(tr("Ex. : Réunion de l'équipe produit sur DoYouCopy, avec Claire et Karim."))
         prompt.setFixedHeight(72)
         prompt.textChanged.connect(lambda: self._set("initial_prompt", prompt.toPlainText()))
         self.initial_prompt_edit = prompt
-        form.addRow("Contexte", prompt)
-        form.addRow("", self._hint("Le sujet, des noms, un style d'écriture : le modèle s'en inspire."))
-        vocabulary = QPushButton("Mots à favoriser et remplacements…")
+        form.addRow(tr("Contexte"), prompt)
+        form.addRow("", self._hint(tr("Le sujet, des noms, un style d'écriture : le modèle s'en inspire.")))
+        vocabulary = QPushButton(tr("Mots à favoriser et remplacements…"))
         vocabulary.clicked.connect(self.vocabulary_requested)
         form.addRow("", vocabulary)
 
-        form = self._section(layout, "Qualité et vitesse")
+        form = self._section(layout, tr("Qualité et vitesse"))
         form.addRow(
-            "Recherche",
+            tr("Recherche"),
             self._combo(
                 "beam_size",
-                [(0, "Selon le modèle"), (1, "Rapide (1 hypothèse)"), (3, "Équilibrée (3)"), (5, "Précise (5)"), (8, "Maximale (8)")],
+                [(0, tr("Selon le modèle")), (1, tr("Rapide (1 hypothèse)")), (3, tr("Équilibrée (3)")), (5, tr("Précise (5)")), (8, tr("Maximale (8)"))],
             ),
         )
         form.addRow(
-            "Texte précédent",
+            tr("Texte précédent"),
             self._combo(
                 "condition_previous",
-                [("auto", "Selon le modèle"), ("on", "Utilisé comme contexte"), ("off", "Ignoré (évite les boucles)")],
+                [("auto", tr("Selon le modèle")), ("on", tr("Utilisé comme contexte")), ("off", tr("Ignoré (évite les boucles)"))],
             ),
         )
         form.addRow(
-            "Fichiers",
-            self._combo("batch_size", [(0, "Segment par segment"), (8, "Par lots de 8 (GPU)"), (16, "Par lots de 16 (GPU)")]),
+            tr("Fichiers"),
+            self._combo("batch_size", [(0, tr("Segment par segment")), (8, tr("Par lots de 8 (GPU)")), (16, tr("Par lots de 16 (GPU)"))]),
         )
         form.addRow(
             "",
             self._hint(
-                "Par lots : jusqu'à 3 à 4 fois plus rapide sur une carte graphique, le texte arrive par blocs. "
-                "Nécessite le filtre des silences."
+                tr(
+                    "Par lots : jusqu'à 3 à 4 fois plus rapide sur une carte graphique, le texte arrive par blocs. "
+                    "Nécessite le filtre des silences."
+                )
             ),
         )
 
@@ -342,8 +366,8 @@ class SettingsDialog(QDialog):
         self.translate_warning.setVisible(self.settings.task == "translate" and self.settings.model_key == "turbo")
 
     def _silences(self, layout: QVBoxLayout) -> None:
-        form = self._section(layout, "Filtre des silences (VAD)")
-        form.addRow("", self._check("vad_filter", "Ignorer les silences (fichiers et enregistrements)"))
+        form = self._section(layout, tr("Filtre des silences (VAD)"))
+        form.addRow("", self._check("vad_filter", tr("Ignorer les silences (fichiers et enregistrements)")))
         slider = QSlider(Qt.Orientation.Horizontal)
         slider.setRange(20, 80)
         slider.setValue(round(self.settings.vad_threshold * 100))
@@ -358,54 +382,54 @@ class SettingsDialog(QDialog):
         self.vad_slider = slider
         row = QHBoxLayout()
         row.setSpacing(10)
-        row.addWidget(QLabel("Sensible"))
+        row.addWidget(QLabel(tr("Sensible")))
         row.addWidget(slider, 1)
-        row.addWidget(QLabel("Strict"))
+        row.addWidget(QLabel(tr("Strict")))
         row.addWidget(value)
-        form.addRow("Détection de la voix", row)
-        form.addRow("Pause minimale", self._spin("vad_min_silence_ms", 100, 3000, 100, " ms"))
-        form.addRow("", self._hint("Seuil bas : capte les voix faibles mais aussi du bruit. Seuil haut : ignore les murmures."))
+        form.addRow(tr("Détection de la voix"), row)
+        form.addRow(tr("Pause minimale"), self._spin("vad_min_silence_ms", 100, 3000, 100, " ms"))
+        form.addRow("", self._hint(tr("Seuil bas : capte les voix faibles mais aussi du bruit. Seuil haut : ignore les murmures.")))
 
-        form = self._section(layout, "Hallucinations")
+        form = self._section(layout, tr("Hallucinations"))
         form.addRow(
             "",
             self._check(
                 "skip_silence_hallucinations",
-                "Supprimer le texte inventé pendant les longs silences",
-                "Whisper « invente » parfois des phrases (« Merci d'avoir regardé ») sur du silence.",
+                tr("Supprimer le texte inventé pendant les longs silences"),
+                tr("Whisper « invente » parfois des phrases (« Merci d'avoir regardé ») sur du silence."),
             ),
         )
-        form.addRow("Seuil « pas de parole »", self._spin("no_speech_threshold", 0.3, 0.95, 0.05, decimals=2))
-        form.addRow("Pénalité de répétition", self._spin("repetition_penalty", 1.0, 1.5, 0.05, decimals=2))
-        form.addRow("", self._hint("Au-dessus de 1, le modèle répète moins les mêmes mots en boucle."))
+        form.addRow(tr("Seuil « pas de parole »"), self._spin("no_speech_threshold", 0.3, 0.95, 0.05, decimals=2))
+        form.addRow(tr("Pénalité de répétition"), self._spin("repetition_penalty", 1.0, 1.5, 0.05, decimals=2))
+        form.addRow("", self._hint(tr("Au-dessus de 1, le modèle répète moins les mêmes mots en boucle.")))
 
     def _dictation(self, layout: QVBoxLayout) -> None:
-        form = self._section(layout, "Raccourci")
+        form = self._section(layout, tr("Raccourci"))
         hotkey = QKeySequenceEdit(QKeySequence.fromString(self.settings.dictation_hotkey))
         hotkey.setMaximumSequenceLength(1)
         for line in hotkey.findChildren(QLineEdit):
-            line.setPlaceholderText("Appuyez sur un raccourci")
+            line.setPlaceholderText(tr("Appuyez sur un raccourci"))
         hotkey.editingFinished.connect(self._hotkey_edited)
         self.hotkey_edit = hotkey
-        form.addRow("Raccourci", hotkey)
+        form.addRow(tr("Raccourci"), hotkey)
         self.hotkey_error = self._hint("", warning=True)
         self.hotkey_error.hide()
         form.addRow("", self.hotkey_error)
-        modes = SegmentedControl([("hold", "Maintenir"), ("toggle", "Basculer")])
+        modes = SegmentedControl([("hold", tr("Maintenir")), ("toggle", tr("Basculer"))])
         modes.set_value(self.settings.dictation_mode)
         modes.changed.connect(lambda value: self._set("dictation_mode", value))
         self.dictation_mode_control = modes
-        form.addRow("Mode", modes)
-        form.addRow("", self._check("dictation_enabled", "Dictée active"))
+        form.addRow(tr("Mode"), modes)
+        form.addRow("", self._check("dictation_enabled", tr("Dictée active")))
 
-        form = self._section(layout, "Texte dicté")
+        form = self._section(layout, tr("Texte dicté"))
         form.addRow(
-            "Sortie",
-            self._combo("dictation_output", [("paste", "Coller dans l'application active"), ("clipboard", "Copier seulement")]),
+            tr("Sortie"),
+            self._combo("dictation_output", [("paste", tr("Coller dans l'application active")), ("clipboard", tr("Copier seulement"))]),
         )
-        form.addRow("", self._check("dictation_trailing_space", "Ajouter un espace après le texte"))
-        form.addRow("", self._check("voice_commands", "Commandes vocales de ponctuation (« virgule », « à la ligne »…)"))
-        form.addRow("", self._check("dictation_sounds", "Signal sonore au début et à la fin"))
+        form.addRow("", self._check("dictation_trailing_space", tr("Ajouter un espace après le texte")))
+        form.addRow("", self._check("voice_commands", tr("Commandes vocales de ponctuation (« virgule », « à la ligne »…)")))
+        form.addRow("", self._check("dictation_sounds", tr("Signal sonore au début et à la fin")))
 
     def _hotkey_edited(self) -> None:
         text = self.hotkey_edit.keySequence().toString(QKeySequence.SequenceFormat.PortableText)
@@ -422,186 +446,192 @@ class SettingsDialog(QDialog):
         self._set("dictation_hotkey", hotkey.text)
 
     def _live(self, layout: QVBoxLayout) -> None:
-        form = self._section(layout, "Réactivité")
-        form.addRow("Intervalle entre passes", self._spin("live_step_s", 0.5, 3.0, 0.25, " s", decimals=2))
-        form.addRow("Silence de fin de phrase", self._spin("live_endpoint_s", 0.4, 2.0, 0.1, " s", decimals=1))
+        form = self._section(layout, tr("Réactivité"))
+        form.addRow(tr("Intervalle entre passes"), self._spin("live_step_s", 0.5, 3.0, 0.25, " s", decimals=2))
+        form.addRow(tr("Silence de fin de phrase"), self._spin("live_endpoint_s", 0.4, 2.0, 0.1, " s", decimals=1))
         form.addRow(
             "",
             self._hint(
-                "Intervalle court : texte plus réactif, mais davantage de calcul (à éviter sur processeur). "
-                "Silence de fin court : les phrases sont validées plus tôt."
+                tr(
+                    "Intervalle court : texte plus réactif, mais davantage de calcul (à éviter sur processeur). "
+                    "Silence de fin court : les phrases sont validées plus tôt."
+                )
             ),
         )
 
     def _exports(self, layout: QVBoxLayout) -> None:
-        form = self._section(layout, "Export rapide (Ctrl+S)")
+        form = self._section(layout, tr("Export rapide (Ctrl+S)"))
         form.addRow(
-            "Format", self._combo("default_export", [(e.suffix, f"{e.label} ({e.suffix})") for e in export.exporters()])
+            tr("Format"), self._combo("default_export", [(e.suffix, f"{tr(e.label)} ({e.suffix})") for e in export.exporters()])
         )
-        form = self._section(layout, "Sous-titres (SRT, WebVTT)")
-        form.addRow("Caractères par ligne", self._spin("subtitle_max_chars", 20, 80, 1))
-        form.addRow("Lignes par sous-titre", self._spin("subtitle_max_lines", 1, 3, 1))
-        form.addRow("", self._hint("Norme habituelle : 42 caractères, 2 lignes. Réseaux sociaux verticaux : 20 à 30, 1 ligne."))
+        form = self._section(layout, tr("Sous-titres (SRT, WebVTT)"))
+        form.addRow(tr("Caractères par ligne"), self._spin("subtitle_max_chars", 20, 80, 1))
+        form.addRow(tr("Lignes par sous-titre"), self._spin("subtitle_max_lines", 1, 3, 1))
+        form.addRow("", self._hint(tr("Norme habituelle : 42 caractères, 2 lignes. Réseaux sociaux verticaux : 20 à 30, 1 ligne.")))
 
     def _history(self, layout: QVBoxLayout) -> None:
-        form = self._section(layout, "Enregistrement automatique")
-        form.addRow("", self._check("history_enabled", "Garder chaque transcription dans l'historique"))
+        form = self._section(layout, tr("Enregistrement automatique"))
+        form.addRow("", self._check("history_enabled", tr("Garder chaque transcription dans l'historique")))
         form.addRow(
             "",
             self._check(
                 "history_dictation",
-                "Garder aussi le texte des dictées (raccourci global)",
-                "Retrouvez vos dictées dans l'historique, marquées « Dictée ».",
+                tr("Garder aussi le texte des dictées (raccourci global)"),
+                tr("Retrouvez vos dictées dans l'historique, marquées « Dictée »."),
             ),
         )
-        form = self._section(layout, "Audio")
+        form = self._section(layout, tr("Audio"))
         form.addRow(
             "",
             self._check(
                 "history_keep_audio",
-                "Conserver l'audio des enregistrements (micro et Direct)",
-                "Pour réécouter un passage ou le retranscrire avec un autre modèle. FLAC, environ 60 Mo par heure.",
+                tr("Conserver l'audio des enregistrements (micro et Direct)"),
+                tr("Pour réécouter un passage ou le retranscrire avec un autre modèle. FLAC, environ 60 Mo par heure."),
             ),
         )
-        days = self._spin("history_audio_days", 0, 3650, 1, " jours")
-        days.setSpecialValueText("Jamais")
-        form.addRow("Supprimer l'audio après", days)
-        form.addRow("", self._hint("Le texte est toujours conservé. Les fichiers importés ne sont pas copiés."))
+        days = self._spin("history_audio_days", 0, 3650, 1, tr(" jours"))
+        days.setSpecialValueText(tr("Jamais"))
+        form.addRow(tr("Supprimer l'audio après"), days)
+        form.addRow("", self._hint(tr("Le texte est toujours conservé. Les fichiers importés ne sont pas copiés.")))
 
-        form = self._section(layout, "Données")
+        form = self._section(layout, tr("Données"))
         if self._history_dir is not None:
-            folder = QPushButton("Ouvrir le dossier")
+            folder = QPushButton(tr("Ouvrir le dossier"))
             folder.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(packaging.real_path(self._history_dir)))))
             form.addRow("", folder)
-        erase = QPushButton("Tout effacer…")
+        erase = QPushButton(tr("Tout effacer…"))
         erase.clicked.connect(self._confirm_history_clear)
         erase.setEnabled(self._history_dir is not None)
         self.history_clear_button = erase
         form.addRow("", erase)
-        form.addRow("", self._hint("Tout reste sur ce PC, dans votre profil Windows."))
+        form.addRow("", self._hint(tr("Tout reste sur ce PC, dans votre profil Windows.")))
 
     def _confirm_history_clear(self) -> None:
         answer = QMessageBox.question(
-            self, "Effacer l'historique", "Effacer toutes les transcriptions et leur audio ? C'est définitif."
+            self, tr("Effacer l'historique"), tr("Effacer toutes les transcriptions et leur audio ? C'est définitif.")
         )
         if answer == QMessageBox.StandardButton.Yes:
             self.history_clear_requested.emit()
 
     def _models(self, layout: QVBoxLayout) -> None:
-        form = self._section(layout, "Modèle utilisé")
-        model = self._combo("model_key", [(k, f"{s.label} · {s.size_gb:.1f} Go".replace(".", ",")) for k, s in MODELS.items()])
+        form = self._section(layout, tr("Modèle utilisé"))
+        model = self._combo("model_key", [(k, tr("{model} · {size} Go").format(model=tr(s.label), size=number(s.size_gb))) for k, s in MODELS.items()])
         model.currentIndexChanged.connect(lambda _: self._update_translate_warning())
-        form.addRow("Modèle", model)
+        form.addRow(tr("Modèle"), model)
         self.model_description = self._hint("")
         form.addRow("", self.model_description)
         model.currentIndexChanged.connect(lambda _: self._describe_model())
         self._describe_model()
 
-        form = self._section(layout, "Modèles téléchargés")
+        form = self._section(layout, tr("Modèles téléchargés"))
         self.models_box = QVBoxLayout()
         form.addRow(self.models_box)
         self._refresh_models()
 
-        form = self._section(layout, "Emplacement")
+        form = self._section(layout, tr("Emplacement"))
         folder = QLineEdit(self.settings.models_dir)
         folder.setReadOnly(True)
         self.models_dir_edit = folder
-        browse = QPushButton("Changer…")
+        browse = QPushButton(tr("Changer…"))
         browse.clicked.connect(self._choose_models_dir)
         row = QHBoxLayout()
         row.addWidget(folder, 1)
         row.addWidget(browse)
-        form.addRow("Dossier", row)
+        form.addRow(tr("Dossier"), row)
         form.addRow(
             "",
             self._check(
                 "allow_download",
-                "Télécharger automatiquement un modèle manquant",
-                "Désactivé : DoYouCopy n'accède jamais au réseau (mode hors ligne strict).",
+                tr("Télécharger automatiquement un modèle manquant"),
+                tr("Désactivé : DoYouCopy n'accède jamais au réseau (mode hors ligne strict)."),
             ),
         )
 
     def _describe_model(self) -> None:
         spec = MODELS.get(self.settings.model_key)
-        self.model_description.setText(spec.description if spec else "")
+        self.model_description.setText(tr(spec.description) if spec else "")
 
     def _refresh_models(self) -> None:
         _clear_layout(self.models_box)
         models_dir = Path(self.settings.models_dir)
         for key, spec in MODELS.items():
             size = model_download.installed_size(models_dir, spec.model_name)
-            status = f"{size / 1e9:.1f} Go sur le disque".replace(".", ",") if size else "Non téléchargé"
+            status = tr("{size} Go sur le disque").format(size=number(size / 1e9)) if size else tr("Non téléchargé")
             row = QHBoxLayout()
-            name = QLabel(f"{spec.label}")
+            name = QLabel(tr(spec.label))
             state = QLabel(status)
             state.setObjectName("SettingsHint")
             row.addWidget(name, 1)
             row.addWidget(state)
             if size:
-                delete = QPushButton("Supprimer")
+                delete = QPushButton(tr("Supprimer"))
                 delete.setEnabled(key != self.settings.model_key)
-                delete.setToolTip("Le modèle utilisé ne peut pas être supprimé." if key == self.settings.model_key else "")
+                delete.setToolTip(tr("Le modèle utilisé ne peut pas être supprimé.") if key == self.settings.model_key else "")
                 delete.clicked.connect(lambda _=False, s=spec: self._delete_model(s))
                 row.addWidget(delete)
             self.models_box.addLayout(row)
 
     def _delete_model(self, spec) -> None:
         answer = QMessageBox.question(
-            self, "Supprimer le modèle", f"Supprimer {spec.label} ? Il sera retéléchargé si vous le choisissez à nouveau."
+            self,
+            tr("Supprimer le modèle"),
+            tr("Supprimer {model} ? Il sera retéléchargé si vous le choisissez à nouveau.").format(model=tr(spec.label)),
         )
         if answer == QMessageBox.StandardButton.Yes:
             model_download.discard(Path(self.settings.models_dir), spec.model_name)
             self._refresh_models()
 
     def _choose_models_dir(self) -> None:
-        folder = QFileDialog.getExistingDirectory(self, "Dossier des modèles", self.settings.models_dir)
+        folder = QFileDialog.getExistingDirectory(self, tr("Dossier des modèles"), self.settings.models_dir)
         if folder:
             self.models_dir_edit.setText(str(Path(folder)))
             self._set("models_dir", str(Path(folder)))
             self._refresh_models()
 
     def _hardware(self, layout: QVBoxLayout) -> None:
-        form = self._section(layout, "Calcul")
-        devices = SegmentedControl([("auto", "Automatique"), ("gpu", "Carte graphique"), ("cpu", "Processeur")])
+        form = self._section(layout, tr("Calcul"))
+        devices = SegmentedControl([("auto", tr("Automatique")), ("gpu", tr("Carte graphique")), ("cpu", tr("Processeur"))])
         devices.set_value(self.settings.device)
         devices.changed.connect(self._device_changed)
         self.device_control = devices
-        form.addRow("Calculer sur", devices)
+        form.addRow(tr("Calculer sur"), devices)
         self.compute_combo = QComboBox()
         self.compute_combo.currentIndexChanged.connect(
             lambda _: self.compute_combo.currentData() and self._set("compute_type", self.compute_combo.currentData())
         )
-        form.addRow("Précision", self.compute_combo)
+        form.addRow(tr("Précision"), self.compute_combo)
         threads = self._spin("cpu_threads", 0, os.cpu_count() or 64, 1)
-        threads.setSpecialValueText("Automatique")
-        form.addRow("Threads processeur", threads)
+        threads.setSpecialValueText(tr("Automatique"))
+        form.addRow(tr("Threads processeur"), threads)
         form.addRow(
             "",
             self._hint(
-                "Appliqué tout de suite : le modèle est rechargé (quelques secondes), "
-                "après la transcription en cours s'il y en a une."
+                tr(
+                    "Appliqué tout de suite : le modèle est rechargé (quelques secondes), "
+                    "après la transcription en cours s'il y en a une."
+                )
             ),
         )
         self._fill_compute_types()
 
-        form = self._section(layout, "État")
+        form = self._section(layout, tr("État"))
         self.device_label = QLabel(self._device_description)
         self.device_label.setProperty("mono", True)
-        form.addRow("Utilisé", self.device_label)
+        form.addRow(tr("Utilisé"), self.device_label)
         status, can_install = self._hardware_status()
         self.hardware_label = self._hint(status)
-        form.addRow("Carte", self.hardware_label)
-        self.install_button = QPushButton("Installer l'accélération graphique…")
+        form.addRow(tr("Carte"), self.hardware_label)
+        self.install_button = QPushButton(tr("Installer l'accélération graphique…"))
         self.install_button.clicked.connect(self.install_runtime_requested)
         self.install_button.setVisible(can_install)
         form.addRow("", self.install_button)
 
-        form = self._section(layout, "Diagnostic")
-        copy = QPushButton("Copier les informations de diagnostic")
+        form = self._section(layout, tr("Diagnostic"))
+        copy = QPushButton(tr("Copier les informations de diagnostic"))
         copy.clicked.connect(self._copy_diagnostics)
         copy.setEnabled(self._diagnostics is not None)
         self.diagnostics_button = copy
-        logs = QPushButton("Ouvrir le dossier des journaux")
+        logs = QPushButton(tr("Ouvrir le dossier des journaux"))
         logs.clicked.connect(self._open_logs)
         logs.setEnabled(self._logs_dir is not None)
         row = QHBoxLayout()
@@ -610,8 +640,10 @@ class SettingsDialog(QDialog):
         row.addStretch()
         form.addRow(row)
         self.diagnostics_status = self._hint(
-            "Machine, carte graphique, versions, réglages et dernières erreurs, à joindre à un signalement. "
-            "Aucune transcription ni aucun mot du vocabulaire n'y figure : relisez-le avant de l'envoyer."
+            tr(
+                "Machine, carte graphique, versions, réglages et dernières erreurs, à joindre à un signalement. "
+                "Aucune transcription ni aucun mot du vocabulaire n'y figure : relisez-le avant de l'envoyer."
+            )
         )
         form.addRow(self.diagnostics_status)
 
@@ -626,7 +658,7 @@ class SettingsDialog(QDialog):
         combo.blockSignals(True)
         combo.clear()
         for value in ("auto", *types):
-            combo.addItem(COMPUTE_LABELS.get(value, value), value)
+            combo.addItem(tr(COMPUTE_LABELS.get(value, value)), value)
         index = combo.findData(self.settings.compute_type)
         combo.setCurrentIndex(max(0, index))
         combo.blockSignals(False)
@@ -647,7 +679,7 @@ class SettingsDialog(QDialog):
         finally:
             QApplication.restoreOverrideCursor()
         QGuiApplication.clipboard().setText(text)
-        self.diagnostics_button.setText("Copié dans le presse-papiers ✓")
+        self.diagnostics_button.setText(tr("Copié dans le presse-papiers ✓"))
 
     def _open_logs(self) -> None:
         self._logs_dir.mkdir(parents=True, exist_ok=True)
@@ -658,16 +690,19 @@ class SettingsDialog(QDialog):
     def _autostart_toggled(self, enabled: bool) -> None:
         if not autostart.set_enabled(enabled):
             self._revert(self.autostart_check, enabled)
-            message = "Impossible de modifier le démarrage automatique."
+            message = tr("Impossible de modifier le démarrage automatique.")
             if enabled and packaging.is_packaged():
-                message += " Vérifiez qu'il n'est pas désactivé dans Paramètres Windows > Applications > Démarrage."
-            QMessageBox.warning(self, "Démarrage avec Windows", message)
+                message += tr(" Vérifiez qu'il n'est pas désactivé dans Paramètres Windows > Applications > Démarrage.")
+            QMessageBox.warning(self, tr("Démarrage avec Windows"), message)
 
     def _shortcut_toggled(self, kind: str, enabled: bool) -> None:
         if not shortcuts.set_enabled(kind, enabled):
             self._revert(self.shortcut_checks[kind], enabled)
-            action = "créer" if enabled else "supprimer"
-            QMessageBox.warning(self, "Raccourci", f"Impossible de {action} le raccourci dans {shortcuts.describe(kind)}.")
+            if enabled:
+                message = tr("Impossible de créer le raccourci dans {place}.")
+            else:
+                message = tr("Impossible de supprimer le raccourci dans {place}.")
+            QMessageBox.warning(self, tr("Raccourci"), message.format(place=shortcuts.describe(kind)))
 
     @staticmethod
     def _revert(check: QCheckBox, attempted: bool) -> None:
@@ -679,8 +714,8 @@ class SettingsDialog(QDialog):
     def _confirm_reset(self) -> None:
         answer = QMessageBox.question(
             self,
-            "Rétablir les réglages",
-            "Rétablir tous les réglages par défaut ? Le vocabulaire et le dossier des modèles sont conservés.",
+            tr("Rétablir les réglages"),
+            tr("Rétablir tous les réglages par défaut ? Le vocabulaire et le dossier des modèles sont conservés."),
         )
         if answer == QMessageBox.StandardButton.Yes:
             self.reset_requested.emit()

@@ -25,7 +25,8 @@ from doyoucopy.core.types import (
     TranscriptionInfo,
     Word,
 )
-from doyoucopy.gpu.rocm_env import CPU
+from doyoucopy.gpu.rocm_env import cpu_device
+from doyoucopy.i18n import tr
 
 log = logging.getLogger(__name__)
 
@@ -143,8 +144,10 @@ class FasterWhisperEngine:
             if not (self._device.is_gpu and self._cpu_fallback):
                 raise
             log.exception("Loading %s on GPU failed, retrying on CPU", spec.model_name)
-            self._device = CPU
-            self._model = WhisperModel(path, device=CPU.device, compute_type=CPU.compute_type, **self._threads())
+            self._device = cpu_device()
+            self._model = WhisperModel(
+                path, device=self._device.device, compute_type=self._device.compute_type, **self._threads()
+            )
         self._spec = spec
         self._model_path = path
         if not self._device.is_gpu and _rocm_build():
@@ -169,7 +172,7 @@ class FasterWhisperEngine:
         """audio: a file path or 16 kHz mono samples. The language is detected before
         returning; the segments are decoded lazily, as the iterator is consumed."""
         if self._model is None or self._spec is None:
-            raise RuntimeError("Aucun modèle chargé")
+            raise RuntimeError(tr("Aucun modèle chargé"))
         if isinstance(audio, Path):
             audio = str(audio)
         kwargs = self.transcribe_kwargs(options)
@@ -264,8 +267,10 @@ class FasterWhisperEngine:
             return str(directory)
         if not self._allow_download:
             raise ModelNotAvailableError(
-                f"Modèle {spec.model_name} absent de {self._models_dir}. "
-                "Autorisez le téléchargement (\"allow_download\") ou copiez le modèle."
+                tr(
+                    "Modèle {model} absent de {folder}. "
+                    "Autorisez le téléchargement (\"allow_download\") ou copiez le modèle."
+                ).format(model=spec.model_name, folder=self._models_dir)
             )
         log.info("Downloading %s to %s", spec.model_name, directory)
 

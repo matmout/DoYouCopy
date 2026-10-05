@@ -7,11 +7,12 @@ from collections.abc import Sequence
 
 from doyoucopy.core.types import Segment, Word
 from doyoucopy.export.base import register
+from doyoucopy.i18n import N_
 
 
 class JsonExporter:
     suffix = ".json"
-    label = "JSON (segments et mots)"
+    label = N_("JSON (segments et mots)")
 
     def render(self, segments: Sequence[Segment], **_options) -> str:
         data = {

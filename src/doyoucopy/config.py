@@ -26,6 +26,7 @@ CHOICES: dict[str, frozenset[str]] = {
     "model_key": frozenset(MODELS),
     "mode": frozenset({"record", "live"}),
     "theme": frozenset({"auto", "dark", "light"}),
+    "ui_language": frozenset({"auto", "fr", "en"}),
     "audio_source": frozenset({"mic", "system", "both"}),
     "device": frozenset({"auto", "gpu", "cpu"}),
     "task": frozenset({"transcribe", "translate"}),
@@ -72,6 +73,7 @@ class Settings:
     show_timestamps: bool = False
     mode: str = "record"  # last capture mode: "record" or "live"
     theme: str = "dark"  # "auto" (follow Windows), "dark" or "light"
+    ui_language: str = "auto"  # interface: "auto" (the language of Windows), "fr" or "en"
     input_device: str | None = None  # device name; indices change between sessions
     audio_source: str = "mic"  # main window captures: "mic", "system" (computer audio) or "both"
     device: str = "auto"  # "auto", "gpu" or "cpu"

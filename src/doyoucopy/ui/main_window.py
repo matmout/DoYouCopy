@@ -42,6 +42,7 @@ from doyoucopy.dictation.hotkey import parse_hotkey
 from doyoucopy.export.markdown import MarkdownExporter, timecode
 from doyoucopy.gpu import rocm_env
 from doyoucopy.history_controller import HistoryController
+from doyoucopy.i18n import N_, number, tr
 from doyoucopy.runtime import startup
 from doyoucopy.session import LIVE_KIND, RECORD, SessionController, SessionResult, clock
 from doyoucopy.storage.history import HistoryStore
@@ -66,25 +67,26 @@ from doyoucopy.ui.workers import ModelWorker
 log = logging.getLogger(__name__)
 
 LANGUAGES = [
-    (None, "Langue auto"),
-    ("fr", "Français"),
-    ("en", "Anglais"),
-    ("de", "Allemand"),
-    ("es", "Espagnol"),
-    ("it", "Italien"),
-    ("pt", "Portugais"),
-    ("nl", "Néerlandais"),
-    ("pl", "Polonais"),
-    ("ru", "Russe"),
-    ("ar", "Arabe"),
-    ("zh", "Chinois"),
-    ("ja", "Japonais"),
+    (None, N_("Langue auto")),
+    ("fr", N_("Français")),
+    ("en", N_("Anglais")),
+    ("de", N_("Allemand")),
+    ("es", N_("Espagnol")),
+    ("it", N_("Italien")),
+    ("pt", N_("Portugais")),
+    ("nl", N_("Néerlandais")),
+    ("pl", N_("Polonais")),
+    ("ru", N_("Russe")),
+    ("ar", N_("Arabe")),
+    ("zh", N_("Chinois")),
+    ("ja", N_("Japonais")),
 ]
-MODES = [("record", "Enregistrement"), ("live", "Direct")]
-MODEL_LABELS = {"light": "Léger", "turbo": "Turbo", "precise": "Précis"}
+MODES = [("record", N_("Enregistrement")), ("live", N_("Direct"))]
+MODEL_LABELS = {"light": N_("Léger"), "turbo": "Turbo", "precise": N_("Précis")}
 ENGINE_SETTINGS = {"device", "compute_type", "cpu_threads", "models_dir", "allow_download"}
 
-AUDIO_FILTER = "Audio / vidéo (*.wav *.mp3 *.m4a *.flac *.ogg *.opus *.aac *.wma *.mp4 *.mkv *.webm);;Tous (*)"
+AUDIO_FILTER = N_("Audio / vidéo ({patterns});;Tous (*)")
+AUDIO_PATTERNS = "*.wav *.mp3 *.m4a *.flac *.ogg *.opus *.aac *.wma *.mp4 *.mkv *.webm"
 AUDIO_SUFFIXES = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".aac", ".wma", ".mp4", ".mkv", ".webm"}
 LEVEL_INTERVAL_MS = 33
 MIN_WIDTH = 720  # of the main column; the history panel adds its own width
@@ -96,6 +98,7 @@ class MainWindow(QMainWindow):
     hotkey_changed = Signal(str)
     theme_tokens_changed = Signal(object)  # theme.Tokens
     install_runtime_requested = Signal()
+    restart_requested = Signal()  # interface language changed: app.py restarts the app
 
     def __init__(
         self,
@@ -146,23 +149,23 @@ class MainWindow(QMainWindow):
         # top bar: wordmark, model, language, settings
         wordmark = QLabel("DoYouCopy")
         wordmark.setObjectName("Wordmark")
-        self.model_control = SegmentedControl([(k, MODEL_LABELS.get(k, s.label)) for k, s in MODELS.items()])
+        self.model_control = SegmentedControl([(k, tr(MODEL_LABELS.get(k, s.label))) for k, s in MODELS.items()])
         self.model_control.set_value(self.settings.model_key)
         self.model_control.setToolTip(
-            "Léger : small, pour le processeur.  Turbo : rapide et précis.  Précis : large-v3, plus lent."
+            tr("Léger : small, pour le processeur.  Turbo : rapide et précis.  Précis : large-v3, plus lent.")
         )
         self.model_control.changed.connect(self._model_changed)
         self.language_combo = QComboBox()
         for code, name in LANGUAGES:
-            self.language_combo.addItem(name, code)
+            self.language_combo.addItem(tr(name), code)
         self.language_combo.setCurrentIndex(max(0, self.language_combo.findData(self.settings.language)))
         self.settings_button = QToolButton()
         self.settings_button.setObjectName("IconButton")
-        self.settings_button.setToolTip("Réglages")
+        self.settings_button.setToolTip(tr("Réglages"))
         self.settings_button.clicked.connect(self._open_settings)
         self.history_button = QToolButton()
         self.history_button.setObjectName("IconButton")
-        self.history_button.setToolTip("Historique (Ctrl+H)")
+        self.history_button.setToolTip(tr("Historique (Ctrl+H)"))
         self.history_button.setCheckable(True)
         self.history_button.setVisible(self.history is not None)
 
@@ -179,12 +182,12 @@ class MainWindow(QMainWindow):
             row.addWidget(widget, alignment=Qt.AlignmentFlag.AlignVCenter)
 
         # capture area: mode, record button, waveform + timer, import
-        self.mode_control = SegmentedControl(MODES)
+        self.mode_control = SegmentedControl([(value, tr(label)) for value, label in MODES])
         self.mode_control.set_value(self.settings.mode)
-        self.source_control = SegmentedControl(SOURCES)
+        self.source_control = SegmentedControl([(value, tr(label)) for value, label in SOURCES])
         self.source_control.set_value(self.settings.audio_source)
         self.source_control.setToolTip(
-            "Ce que DoYouCopy écoute : votre micro, le son de l'ordinateur (réunion, vidéo), ou les deux."
+            tr("Ce que DoYouCopy écoute : votre micro, le son de l'ordinateur (réunion, vidéo), ou les deux.")
         )
         self.source_control.changed.connect(self._source_changed)
         self._consent_shown = False
@@ -194,11 +197,11 @@ class MainWindow(QMainWindow):
         self.timer_label = QLabel("00:00")
         self.timer_label.setProperty("mono", True)
         self.timer_label.setFixedWidth(48)
-        self.import_button = QPushButton("Importer un fichier")
+        self.import_button = QPushButton(tr("Importer un fichier"))
         self.import_button.setObjectName("LinkButton")
         self.import_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.import_button.clicked.connect(self._open_file)
-        import_hint = QLabel("ou glissez-le dans la fenêtre")
+        import_hint = QLabel(tr("ou glissez-le dans la fenêtre"))
         import_hint.setProperty("muted", True)
 
         wave_row = QHBoxLayout()
@@ -248,36 +251,36 @@ class MainWindow(QMainWindow):
 
         # bottom bar: actions, status, device
         self.copy_button = QToolButton()
-        self.copy_button.setText("Copier")
+        self.copy_button.setText(tr("Copier"))
         self.copy_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.copy_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         self.copy_button.clicked.connect(lambda: self._copy())
         copy_menu = QMenu(self.copy_button)
-        copy_menu.addAction("Texte brut", self._copy)
-        copy_menu.addAction("Texte horodaté", lambda: self._copy("timestamps"))
+        copy_menu.addAction(tr("Texte brut"), self._copy)
+        copy_menu.addAction(tr("Texte horodaté"), lambda: self._copy("timestamps"))
         copy_menu.addAction("Markdown", lambda: self._copy("markdown"))
         self.copy_button.setMenu(copy_menu)
         self.export_button = QToolButton()
-        self.export_button.setText("Exporter")
+        self.export_button.setText(tr("Exporter"))
         self.export_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.export_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         menu = QMenu(self.export_button)
         for exporter in export.exporters():
-            menu.addAction(f"{exporter.label} ({exporter.suffix})", lambda e=exporter: self._export(e.suffix))
+            menu.addAction(f"{tr(exporter.label)} ({exporter.suffix})", lambda e=exporter: self._export(e.suffix))
         self.export_button.setMenu(menu)
-        self.clear_button = QPushButton("Effacer")
+        self.clear_button = QPushButton(tr("Effacer"))
         self.clear_button.clicked.connect(self._clear)
-        self.edit_button = QPushButton("Modifier")
+        self.edit_button = QPushButton(tr("Modifier"))
         self.edit_button.setCheckable(True)
-        self.edit_button.setToolTip("Corriger le texte, les horodatages sont conservés (Ctrl+E)")
+        self.edit_button.setToolTip(tr("Corriger le texte, les horodatages sont conservés (Ctrl+E)"))
         self.edit_button.toggled.connect(self._set_editing)
-        self.cancel_button = QPushButton("Annuler")
+        self.cancel_button = QPushButton(tr("Annuler"))
         self.cancel_button.setObjectName("OutlineButton")
         self.cancel_button.clicked.connect(lambda: self.session.cancel())
         self.cancel_button.hide()
         self.status_label = QLabel("")
         self.status_label.setProperty("mono", True)
-        self.live_chip = QLabel("DIRECT")
+        self.live_chip = QLabel(tr("DIRECT"))
         self.live_chip.setObjectName("Chip")
         self.live_chip.setProperty("accent", True)
         self.live_chip.hide()
@@ -451,6 +454,7 @@ class MainWindow(QMainWindow):
         dialog.changed.connect(self._on_setting_changed)
         dialog.vocabulary_requested.connect(self._open_vocabulary)
         dialog.install_runtime_requested.connect(self.install_runtime_requested)
+        dialog.restart_requested.connect(self.restart_requested)
         dialog.reset_requested.connect(self.reset_settings)
         dialog.history_clear_requested.connect(self.clear_history)
         self.worker.model_loaded.connect(dialog.set_device_description_from_load)
@@ -464,8 +468,8 @@ class MainWindow(QMainWindow):
         notice = self.cpu_notice
         if notice is None:
             if self.settings.device == "cpu":
-                return "Calcul sur le processeur, choisi dans ces réglages.", False
-            return "Accélération graphique active.", False
+                return tr("Calcul sur le processeur, choisi dans ces réglages."), False
+            return tr("Accélération graphique active."), False
         return notice.detail, notice.install_variant is not None
 
     def _on_setting_changed(self, name: str) -> None:
@@ -508,13 +512,14 @@ class MainWindow(QMainWindow):
             self.set_cpu_notice(None)
         elif self.cpu_notice is None:
             self.set_cpu_notice(startup.cpu_notice(startup.RuntimeChoice(self.runtime_variant)))
-        self._status(f"Rechargement du modèle · {device.description}")
+        self._status(tr("Rechargement du modèle · {device}").format(device=device.description))
 
     def reset_settings(self) -> None:
-        """Back to the defaults, keeping the vocabulary, the models folder and the microphone."""
+        """Back to the defaults, keeping the vocabulary, the models folder, the microphone and
+        the interface language (which would only change at the next start)."""
         kept = {
             name: getattr(self.settings, name)
-            for name in ("hotwords", "replacements", "models_dir", "input_device", "mode")
+            for name in ("hotwords", "replacements", "models_dir", "input_device", "mode", "ui_language")
         }
         defaults = Settings(**kept)
         before = {f.name: getattr(self.settings, f.name) for f in fields(Settings)}
@@ -529,7 +534,7 @@ class MainWindow(QMainWindow):
                 engine_done = True
             self._on_setting_changed(name)
         self.save_settings()
-        self.toast.show_message("Réglages par défaut rétablis")
+        self.toast.show_message(tr("Réglages par défaut rétablis"))
 
     def _sync_popover(self) -> None:
         pop = self.settings_popover
@@ -591,7 +596,7 @@ class MainWindow(QMainWindow):
         session = self.session
         dictating = self.dictation is not None and self.dictation.state != "idle"
         if dictating and session.available:
-            self._status("Dictée en cours…", 3000)
+            self._status(tr("Dictée en cours…"), 3000)
             return
         if session.live:
             session.stop_live()
@@ -611,17 +616,17 @@ class MainWindow(QMainWindow):
         """Once per run, before a meeting gets recorded."""
         if self.settings.audio_source != MIC and not self._consent_shown:
             self._consent_shown = True
-            self.toast.show_message("Prévenez les participants avant d'enregistrer une réunion.")
+            self.toast.show_message(tr("Prévenez les participants avant d'enregistrer une réunion."))
 
     def _start_live(self) -> None:
         self._consent_reminder()
         if not self.session.start_live():
             return
-        message = "Parlez, le texte s'affiche au fil de l'eau."
+        message = tr("Parlez, le texte s'affiche au fil de l'eau.")
         if self.cpu_notice is not None:
-            message = "Sur le processeur, le texte arrive avec plusieurs secondes de retard."
+            message = tr("Sur le processeur, le texte arrive avec plusieurs secondes de retard.")
         elif self.model_control.value() != "turbo":
-            message = "Modèle précis : latence plus élevée en direct."
+            message = tr("Modèle précis : latence plus élevée en direct.")
         self._status(message)
 
     def _on_capture_started(self, kind: str) -> None:
@@ -653,7 +658,9 @@ class MainWindow(QMainWindow):
         self._finish_editing()
         if not self.session.available:
             return
-        path, _ = QFileDialog.getOpenFileName(self, "Importer un fichier audio", "", AUDIO_FILTER)
+        path, _ = QFileDialog.getOpenFileName(
+            self, tr("Importer un fichier audio"), "", tr(AUDIO_FILTER).format(patterns=AUDIO_PATTERNS)
+        )
         if path:
             self.session.transcribe_file(Path(path))
 
@@ -678,7 +685,7 @@ class MainWindow(QMainWindow):
         else:
             text = "\n".join(s.text for s in self.segments)
         QGuiApplication.clipboard().setText(text)
-        self.toast.show_message("Texte copié")
+        self.toast.show_message(tr("Texte copié"))
 
     def _export(self, suffix: str) -> None:
         if not self.segments or not self.idle:
@@ -686,9 +693,9 @@ class MainWindow(QMainWindow):
         exporter = next(e for e in export.exporters() if e.suffix == suffix)
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "Exporter la transcription",
+            tr("Exporter la transcription"),
             f"{self.session.source_name}{suffix}",
-            f"{exporter.label} (*{suffix})",
+            f"{tr(exporter.label)} (*{suffix})",
         )
         if not path:
             return
@@ -703,9 +710,9 @@ class MainWindow(QMainWindow):
                 max_lines=self.settings.subtitle_max_lines,
             )
         except Exception as exc:
-            self.transcript.show_error(f"Échec de l'export : {exc}")
+            self.transcript.show_error(tr("Échec de l'export : {error}").format(error=exc))
             return
-        self.toast.show_message(f"Exporté vers {target.name}")
+        self.toast.show_message(tr("Exporté vers {name}").format(name=target.name))
 
     def _clear(self) -> None:
         self._finish_editing(apply=False)
@@ -729,11 +736,13 @@ class MainWindow(QMainWindow):
             self.transcript.show_loading(label)
 
     def _on_model_downloading(self, model_name: str, done: int, total: int) -> None:
-        size = f"{done / 1024**3:.1f} / {total / 1024**3:.1f} Go".replace(".", ",")
+        size = tr("{done} / {total} Go").format(done=number(done / 1024**3), total=number(total / 1024**3))
         if not self.segments and not self.session.busy:
-            self.transcript.show_loading_text(f"Premier lancement : téléchargement de {model_name}… {size}")
+            self.transcript.show_loading_text(
+                tr("Premier lancement : téléchargement de {model}… {size}").format(model=model_name, size=size)
+            )
             self.transcript.set_progress(done / total if total else None)
-        self._status(f"Téléchargement du modèle · {min(100, done * 100 // max(total, 1))} %")
+        self._status(tr("Téléchargement du modèle · {percent} %").format(percent=min(100, done * 100 // max(total, 1))))
 
     def _on_model_loaded(self, key: str, device_description: str) -> None:
         self.loaded_model = MODELS[key].model_name
@@ -742,7 +751,7 @@ class MainWindow(QMainWindow):
         self.device_chip.setText(device_description)
         if not self.segments and not self.session.busy:
             self.transcript.show_empty()
-        self._status(f"Modèle {MODELS[key].model_name} prêt.", 4000)
+        self._status(tr("Modèle {model} prêt.").format(model=MODELS[key].model_name), 4000)
 
     def _on_transcription_started(self) -> None:
         self._new_history_entry()
@@ -788,7 +797,7 @@ class MainWindow(QMainWindow):
             return
         self._finish_editing()
         if not self.session.open(entry.segments, entry.title, entry.language):
-            self.toast.show_message("Terminez d'abord la transcription en cours")
+            self.toast.show_message(tr("Terminez d'abord la transcription en cours"))
             self.history_ctl.set_current(self.history_id)
             return
         self.history_ctl.set_current(entry_id)
@@ -833,7 +842,7 @@ class MainWindow(QMainWindow):
             return
         self.player.load(None)  # releases the audio file, so that it can be deleted
         self.history_ctl.clear()
-        self.toast.show_message("Historique effacé")
+        self.toast.show_message(tr("Historique effacé"))
 
     # ---- correction ------------------------------------------------------
 
@@ -846,11 +855,11 @@ class MainWindow(QMainWindow):
                 return
             self.player.stop()
             self.transcript.start_editing(self.segments)
-            self._status("Modification : une ligne par segment. Recliquez sur Modifier pour valider.")
+            self._status(tr("Modification : une ligne par segment. Recliquez sur Modifier pour valider."))
         else:
             texts = self.transcript.stop_editing()
             if len(texts) == len(self.segments) and self.session.edit_texts(texts):
-                self._status("Corrections enregistrées.", 4000)  # re-rendered by _on_segments_edited
+                self._status(tr("Corrections enregistrées."), 4000)  # re-rendered by _on_segments_edited
             else:
                 self._status("")
                 self._rerender()
@@ -880,12 +889,12 @@ class MainWindow(QMainWindow):
             menu.addSeparator()
             if self.player.path is not None:
                 cursor_position = editor.cursorForPosition(position).position()
-                menu.addAction("Lire à partir d'ici", lambda: self._play_from(cursor_position))
-            precise = MODELS["precise"].label
-            action = menu.addAction(f"Retranscrire avec le modèle {precise}", self._retranscribe_selection)
+                menu.addAction(tr("Lire à partir d'ici"), lambda: self._play_from(cursor_position))
+            precise = tr(MODELS["precise"].label)
+            action = menu.addAction(tr("Retranscrire avec le modèle {model}").format(model=precise), self._retranscribe_selection)
             action.setEnabled(self.player.path is not None and self.session.available)
             if self.player.path is None:
-                action.setToolTip("L'audio de cette transcription n'est pas disponible.")
+                action.setToolTip(tr("L'audio de cette transcription n'est pas disponible."))
         menu.exec(editor.viewport().mapToGlobal(position))
 
     def _play_from(self, position: int) -> None:
@@ -928,14 +937,14 @@ class MainWindow(QMainWindow):
         if notice is None:
             self.notice.hide()
             return
-        action = "Installer l'accélération" if notice.install_variant else None
+        action = tr("Installer l'accélération") if notice.install_variant else None
         self.notice.show_notice(notice.title, notice.detail, action)
 
     def _on_error(self, message: str, failed_load: bool) -> None:
         self.transcript.set_progress(None)
         if not self.segments:
             self.transcript.show_empty()
-        self.transcript.show_error(message, "Réessayer" if failed_load else None)
+        self.transcript.show_error(message, tr("Réessayer") if failed_load else None)
 
     # ---- helpers ------------------------------------------------------
 

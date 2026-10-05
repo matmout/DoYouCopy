@@ -27,6 +27,7 @@ from doyoucopy.core.engine import TranscriptionEngine
 from doyoucopy.core.live import LiveTranscriber
 from doyoucopy.core.models import get_model
 from doyoucopy.core.types import SAMPLE_RATE, Segment, TranscribeOptions, Word
+from doyoucopy.i18n import tr
 
 log = logging.getLogger(__name__)
 
@@ -180,7 +181,7 @@ class ModelWorker(QObject):
             self._engine.configure(**engine_kwargs)
         except Exception as exc:
             log.exception("Engine reconfiguration failed")
-            self.error.emit(f"Impossible d'appliquer les réglages : {exc}")
+            self.error.emit(tr("Impossible d'appliquer les réglages : {error}").format(error=exc))
             return
         self._load(key)
 
@@ -195,7 +196,7 @@ class ModelWorker(QObject):
             self._engine.load(spec)
         except Exception as exc:
             log.exception("Model load failed")
-            self.error.emit(f"Impossible de charger {spec.model_name} : {exc}")
+            self.error.emit(tr("Impossible de charger {model} : {error}").format(model=spec.model_name, error=exc))
             return
         self.model_loaded.emit(spec.key, self._engine.device.description)
 
@@ -214,7 +215,7 @@ class ModelWorker(QObject):
                 self.segment_ready.emit(segment)
         except Exception as exc:
             log.exception("Transcription failed")
-            self.error.emit(f"Échec de la transcription : {exc}")
+            self.error.emit(tr("Échec de la transcription : {error}").format(error=exc))
             return
         self.transcription_finished.emit(
             time.perf_counter() - start, info.duration, self._cancel.is_set()
@@ -239,7 +240,7 @@ class ModelWorker(QObject):
             self.live_update.emit(live.flush(), 0.0)
         except Exception as exc:
             log.exception("Live transcription failed")
-            self.error.emit(f"Échec de la transcription en direct : {exc}")
+            self.error.emit(tr("Échec de la transcription en direct : {error}").format(error=exc))
         self.live_finished.emit()
 
     @Slot(object, float, float, object, str, int)
@@ -257,7 +258,7 @@ class ModelWorker(QObject):
             result = [shift_segment(s, start) for s in segments]
         except Exception as exc:
             log.exception("Re-transcription failed")
-            self.retranscribe_failed.emit(job, f"Échec de la retranscription : {exc}")
+            self.retranscribe_failed.emit(job, tr("Échec de la retranscription : {error}").format(error=exc))
             result = None
         if previous is not None and self._engine.model != previous:
             self._load(previous.key)
@@ -271,6 +272,6 @@ class ModelWorker(QObject):
             text = " ".join(s.text for s in segments if s.text)
         except Exception as exc:
             log.exception("Dictation failed")
-            self.dictation_failed.emit(job, f"Échec de la dictée : {exc}")
+            self.dictation_failed.emit(job, tr("Échec de la dictée : {error}").format(error=exc))
             return
         self.dictation_finished.emit(job, text.strip(), info.language)

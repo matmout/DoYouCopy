@@ -2,6 +2,12 @@
 
 ## Prochaine version
 
+### Interface en anglais
+
+- DoYouCopy parle anglais : fenêtres, menus, messages, zone de notification, dictée.
+- Nouveau réglage *Général → Langue de l'interface* : **Système** (la langue de Windows : français si Windows est en français, anglais sinon), **Français** ou **English**. La nouvelle langue s'applique au redémarrage, proposé d'un clic.
+- Les boutons standard de Windows (Oui, Non, Annuler, boîtes d'ouverture de fichiers) suivent la même langue.
+
 ### Microsoft Store
 
 - DoYouCopy est aussi distribué sur le Microsoft Store (paquet MSIX signé par Microsoft), en plus de l'installeur.

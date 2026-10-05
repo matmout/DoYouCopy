@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from doyoucopy.i18n import tr
 from doyoucopy.session import clock
 from doyoucopy.storage.history import KIND_LABELS, Entry, HistoryStore
 from doyoucopy.ui import theme
@@ -43,12 +44,12 @@ class HistoryPanel(QFrame):
         self.store = store
         self.current_id: int | None = None
 
-        title = QLabel("Historique")
+        title = QLabel(tr("Historique"))
         title.setObjectName("PanelTitle")
         self.favorites_button = QToolButton()
         self.favorites_button.setObjectName("IconButton")
         self.favorites_button.setCheckable(True)
-        self.favorites_button.setToolTip("Favoris seulement")
+        self.favorites_button.setToolTip(tr("Favoris seulement"))
         self.favorites_button.toggled.connect(lambda _: self.refresh())
         header = QHBoxLayout()
         header.addWidget(title)
@@ -56,7 +57,7 @@ class HistoryPanel(QFrame):
         header.addWidget(self.favorites_button)
 
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Rechercher dans les transcriptions")
+        self.search.setPlaceholderText(tr("Rechercher dans les transcriptions"))
         self.search.setClearButtonEnabled(True)
         self._search_timer = QTimer(self, singleShot=True, interval=SEARCH_DELAY_MS)
         self._search_timer.timeout.connect(self.refresh)
@@ -109,18 +110,18 @@ class HistoryPanel(QFrame):
             self.empty.hide()
         else:
             self.empty.setText(
-                "Aucun résultat." if query.strip() else "Vos transcriptions apparaîtront ici, enregistrées automatiquement."
+                tr("Aucun résultat.") if query.strip() else tr("Vos transcriptions apparaîtront ici, enregistrées automatiquement.")
             )
             self.empty.show()
 
     @staticmethod
     def _label(entry: Entry, searching: bool) -> str:
         star = "★ " if entry.favorite else ""
-        details = [entry.date_label(), KIND_LABELS.get(entry.kind, entry.kind)]
+        details = [entry.date_label(), tr(KIND_LABELS.get(entry.kind, entry.kind))]
         if entry.duration:
             details.append(clock(entry.duration))
         if entry.audio_path:
-            details.append("audio")
+            details.append(tr("audio"))
         lines = [f"{star}{entry.title}", " · ".join(details)]
         if searching and entry.snippet:
             lines.append(entry.snippet.replace("\n", " "))
@@ -151,14 +152,14 @@ class HistoryPanel(QFrame):
         if entry is None:
             return
         menu = QMenu(self)
-        menu.addAction("Ouvrir", lambda: self.opened.emit(entry_id))
-        menu.addAction("Renommer…", lambda: self.rename(entry_id))
+        menu.addAction(tr("Ouvrir"), lambda: self.opened.emit(entry_id))
+        menu.addAction(tr("Renommer…"), lambda: self.rename(entry_id))
         menu.addAction(
-            "Retirer des favoris" if entry.favorite else "Ajouter aux favoris",
+            tr("Retirer des favoris") if entry.favorite else tr("Ajouter aux favoris"),
             lambda: self.set_favorite(entry_id, not entry.favorite),
         )
         menu.addSeparator()
-        menu.addAction("Supprimer…", lambda: self.delete(entry_id))
+        menu.addAction(tr("Supprimer…"), lambda: self.delete(entry_id))
         menu.exec(self.list.viewport().mapToGlobal(position))
 
     def _rename_selected(self) -> None:
@@ -183,7 +184,7 @@ class HistoryPanel(QFrame):
         if entry is None:
             return
         if title is None:
-            title, ok = QInputDialog.getText(self, "Renommer", "Titre", text=entry.title)
+            title, ok = QInputDialog.getText(self, tr("Renommer"), tr("Titre"), text=entry.title)
             if not ok:
                 return
         self.store.rename(entry_id, title)
@@ -197,7 +198,7 @@ class HistoryPanel(QFrame):
     def delete(self, entry_id: int, confirm: bool = True) -> None:
         if confirm:
             answer = QMessageBox.question(
-                self, "Supprimer", "Supprimer cette transcription de l'historique, avec son audio ?"
+                self, tr("Supprimer"), tr("Supprimer cette transcription de l'historique, avec son audio ?")
             )
             if answer != QMessageBox.StandardButton.Yes:
                 return

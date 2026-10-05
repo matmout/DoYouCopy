@@ -20,6 +20,7 @@ from doyoucopy.config import Settings
 from doyoucopy.core.live import LiveUpdate, merge_sentences
 from doyoucopy.core.textproc import apply_replacements
 from doyoucopy.core.types import SAMPLE_RATE, AudioSource, Segment
+from doyoucopy.i18n import number, tr, trn
 from doyoucopy.options import FILE, LIVE, live_config, transcribe_options
 
 log = logging.getLogger(__name__)
@@ -171,9 +172,9 @@ class SessionController(QObject):
         except Exception as exc:
             log.exception("Audio capture start failed")
             if source == MIC or self._factory is None:
-                self.error.emit(f"Impossible d'ouvrir le micro : {exc}", False)
+                self.error.emit(tr("Impossible d'ouvrir le micro : {error}").format(error=exc), False)
             else:
-                self.error.emit(f"Impossible de démarrer la capture : {exc}", False)
+                self.error.emit(tr("Impossible de démarrer la capture : {error}").format(error=exc), False)
             return False
         return True
 
@@ -187,7 +188,7 @@ class SessionController(QObject):
         if not self.available or not self._open_input():
             return False
         self.capture_started.emit(RECORD)
-        self.status.emit("Enregistrement…", 0)
+        self.status.emit(tr("Enregistrement…"), 0)
         self.changed.emit()
         return True
 
@@ -198,7 +199,7 @@ class SessionController(QObject):
         self.capture_stopped.emit()
         self.changed.emit()
         if audio.size < MIN_RECORDING_S * SAMPLE_RATE:
-            self.status.emit("Enregistrement trop court.", 4000)
+            self.status.emit(tr("Enregistrement trop court."), 4000)
             self.finished.emit(None)
             return
         self._transcribe(audio, RECORD, "dictee", samples=audio if self.keeps_audio else None)
@@ -228,7 +229,7 @@ class SessionController(QObject):
         if not self.live or self.live_stopping:
             return
         self.live_stopping = True
-        self.status.emit("Fin du direct…", 0)
+        self.status.emit(tr("Fin du direct…"), 0)
         self.worker.stop_live()
         self.changed.emit()
 
@@ -258,7 +259,7 @@ class SessionController(QObject):
         self.duration = 0.0
         self.transcription_started.emit()
         self.changed.emit()
-        self.status.emit("Analyse de l'audio…" if self.model_ready else "En attente du modèle…", 0)
+        self.status.emit(tr("Analyse de l'audio…") if self.model_ready else tr("En attente du modèle…"), 0)
         self.worker.transcribe(audio, transcribe_options(self.settings, FILE))
 
     def cancel(self) -> None:
@@ -312,7 +313,7 @@ class SessionController(QObject):
         self._retranscribe_range = (first, last)
         options = replace(transcribe_options(self.settings, FILE), language=self.language or self.settings.language)
         self.worker.retranscribe(audio_path, start, end, options, model_key, self._retranscribe_job)
-        self.status.emit("Retranscription du passage…", 0)
+        self.status.emit(tr("Retranscription du passage…"), 0)
         self.changed.emit()
         return True
 
@@ -324,10 +325,10 @@ class SessionController(QObject):
         segments = [self.apply_vocabulary(s) for s in segments if s.text]
         if segments:
             self.segments[first : last + 1] = segments
-            self.status.emit("Passage retranscrit.", 5000)
+            self.status.emit(tr("Passage retranscrit."), 5000)
             self.segments_edited.emit()
         else:
-            self.status.emit("Aucune parole retrouvée dans ce passage.", 5000)
+            self.status.emit(tr("Aucune parole retrouvée dans ce passage."), 5000)
         self.changed.emit()
 
     def _on_retranscribe_failed(self, job: int, message: str) -> None:
@@ -366,7 +367,7 @@ class SessionController(QObject):
         self.model_loading_now = True
         self.model_ready = False
         self.model_loading.emit(label)
-        self.status.emit("Chargement du modèle…", 0)
+        self.status.emit(tr("Chargement du modèle…"), 0)
         self.changed.emit()
 
     def _on_model_loaded(self, key: str, device_description: str) -> None:
@@ -378,7 +379,9 @@ class SessionController(QObject):
     def _on_started(self, info) -> None:
         self.duration = info.duration
         self.language = info.language
-        self.status.emit(f"Transcription en cours ({info.language}, {clock(info.duration)})", 0)
+        self.status.emit(
+            tr("Transcription en cours ({language}, {duration})").format(language=info.language, duration=clock(info.duration)), 0
+        )
 
     def _on_segment(self, segment: Segment) -> None:
         segment = self.apply_vocabulary(segment)
@@ -391,11 +394,12 @@ class SessionController(QObject):
         self.busy = False
         self.changed.emit()
         if cancelled:
-            self.status.emit("Transcription annulée.", 5000)
+            self.status.emit(tr("Transcription annulée."), 5000)
             self.finished.emit(None)
             return
-        speed = f" · {duration / elapsed:.0f}× temps réel" if elapsed and duration else ""
-        self.status.emit(f"{clock(duration)} transcrit en {elapsed:.1f} s{speed}", 0)
+        speed = tr(" · {speed}× temps réel").format(speed=f"{duration / elapsed:.0f}") if elapsed and duration else ""
+        done = tr("{duration} transcrit en {seconds} s").format(duration=clock(duration), seconds=number(elapsed))
+        self.status.emit(done + speed, 0)
         self.finished.emit(self.result() if self.segments else None)
 
     def _on_live_update(self, update: LiveUpdate, pass_seconds: float) -> None:
@@ -405,7 +409,7 @@ class SessionController(QObject):
         self.segments.extend(committed)
         self.live_updated.emit(committed, update.provisional)
         if pass_seconds:
-            self.status.emit(f"passe {pass_seconds:.2f} s", 0)
+            self.status.emit(tr("passe {seconds} s").format(seconds=number(pass_seconds, 2)), 0)
         self.changed.emit()
 
     def _on_live_finished(self) -> None:
@@ -416,7 +420,8 @@ class SessionController(QObject):
         self.segments = merge_sentences(self.segments)
         if self._tee is not None:
             self._audio, self._tee = self._tee.audio(), None
-        self.status.emit(f"Direct terminé · {len(self.segments)} phrase(s)", 6000)
+        count = len(self.segments)
+        self.status.emit(trn("Direct terminé · {count} phrase", "Direct terminé · {count} phrases", count).format(count=count), 6000)
         self.changed.emit()
         self.finished.emit(self.result() if self.segments else None)
 

@@ -9,6 +9,7 @@ import threading
 from PySide6.QtCore import QObject, Qt, QThread, Signal, Slot
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QProgressBar, QPushButton, QVBoxLayout, QWidget
 
+from doyoucopy.i18n import number, tr
 from doyoucopy.runtime import install, startup, store
 from doyoucopy.runtime.gpu_detect import Detection
 from doyoucopy.runtime.packages import RuntimePackage, package_for
@@ -17,7 +18,7 @@ log = logging.getLogger(__name__)
 
 
 def gigabytes(size: int) -> str:
-    return f"{size / 1024**3:.1f}".replace(".", ",") + " Go"
+    return tr("{size} Go").format(size=number(size / 1024**3))
 
 
 class _InstallJob(QObject):
@@ -35,35 +36,39 @@ class _InstallJob(QObject):
         try:
             install.install(self.package, progress=self.progress.emit, cancel=self.cancel)
         except install.DownloadCancelled:
-            self.finished.emit(False, "Téléchargement annulé. DoYouCopy utilisera le processeur.")
+            self.finished.emit(False, tr("Téléchargement annulé. DoYouCopy utilisera le processeur."))
             return
         except install.DownloadError as exc:
-            self.finished.emit(False, f"{exc}\nDoYouCopy utilisera le processeur.")
+            self.finished.emit(False, f"{exc}\n" + tr("DoYouCopy utilisera le processeur."))
             return
         except Exception as exc:
             log.exception("Runtime install failed")
-            self.finished.emit(False, f"Installation impossible : {exc}\nDoYouCopy utilisera le processeur.")
+            self.finished.emit(
+                False, tr("Installation impossible : {error}").format(error=exc) + "\n" + tr("DoYouCopy utilisera le processeur.")
+            )
             return
         self.progress.emit("probe", 0, 0)
         result = self._probe()
         if result.get("ok"):
-            self.finished.emit(True, "Accélération graphique activée.")
+            self.finished.emit(True, tr("Accélération graphique activée."))
             return
         log.warning("GPU probe after install failed: %s", result)
         store.remove(self.package)
         driver = "NVIDIA" if self.package.variant == "nvidia" else "AMD Adrenalin"
         self.finished.emit(
             False,
-            "La carte graphique n'a pas pu être initialisée.\n"
-            f"Mettez à jour le pilote {driver}, puis relancez cette installation depuis DoYouCopy.\n"
-            "En attendant, DoYouCopy utilisera le processeur.",
+            tr(
+                "La carte graphique n'a pas pu être initialisée.\n"
+                "Mettez à jour le pilote {driver}, puis relancez cette installation depuis DoYouCopy.\n"
+                "En attendant, DoYouCopy utilisera le processeur."
+            ).format(driver=driver),
         )
 
 
 class RuntimeSetupDialog(QDialog):
     def __init__(self, detection: Detection, parent: QWidget | None = None, auto_start: bool = True, probe=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("DoYouCopy · Accélération graphique")
+        self.setWindowTitle(tr("DoYouCopy · Accélération graphique"))
         self.setMinimumWidth(520)
         self.detection = detection
         self.package = package_for(detection.variant) if detection.has_gpu else None
@@ -83,9 +88,9 @@ class RuntimeSetupDialog(QDialog):
         self.progress.hide()
         self.status = QLabel()
         self.status.setProperty("mono", True)
-        self.start_button = QPushButton("Télécharger")
+        self.start_button = QPushButton(tr("Télécharger"))
         self.start_button.clicked.connect(self.start)
-        self.cancel_button = QPushButton("Utiliser le processeur")
+        self.cancel_button = QPushButton(tr("Utiliser le processeur"))
         self.cancel_button.setObjectName("OutlineButton")
         self.cancel_button.clicked.connect(self._cancel_or_close)
 
@@ -105,24 +110,30 @@ class RuntimeSetupDialog(QDialog):
         layout.addLayout(buttons)
 
         if self.package is None:
-            self.title.setText(startup.SLOW_TITLE)
+            self.title.setText(tr(startup.SLOW_TITLE))
             self.detail.setText(
-                f"{detection.reason}.\n\nDoYouCopy fonctionnera sur le processeur : la transcription "
-                "reste possible, mais plus lente (le modèle Turbo est recommandé)."
+                f"{detection.reason}.\n\n"
+                + tr(
+                    "DoYouCopy fonctionnera sur le processeur : la transcription "
+                    "reste possible, mais plus lente (le modèle Turbo est recommandé)."
+                )
             )
             self.start_button.hide()
-            self.cancel_button.setText("Terminer")
+            self.cancel_button.setText(tr("Terminer"))
         elif store.is_installed(self.package):
-            self.title.setText("Accélération graphique déjà installée")
+            self.title.setText(tr("Accélération graphique déjà installée"))
             self.detail.setText(f"{detection.reason}.")
             self.gpu_ready = True
             self.start_button.hide()
-            self.cancel_button.setText("Terminer")
+            self.cancel_button.setText(tr("Terminer"))
         else:
-            self.title.setText(self.package.label)
+            self.title.setText(tr(self.package.label))
             self.detail.setText(
-                f"{detection.reason}.\n\nDoYouCopy télécharge les composants qui lui permettent de transcrire "
-                f"avec cette carte ({gigabytes(self.package.download_size)}), depuis leurs sources officielles."
+                f"{detection.reason}.\n\n"
+                + tr(
+                    "DoYouCopy télécharge les composants qui lui permettent de transcrire "
+                    "avec cette carte ({size}), depuis leurs sources officielles."
+                ).format(size=gigabytes(self.package.download_size))
             )
             if auto_start:
                 self.start()
@@ -133,9 +144,9 @@ class RuntimeSetupDialog(QDialog):
         if self.package is None or self._thread is not None:
             return
         self.start_button.hide()
-        self.cancel_button.setText("Annuler")
+        self.cancel_button.setText(tr("Annuler"))
         self.progress.show()
-        self.status.setText("Connexion…")
+        self.status.setText(tr("Connexion…"))
         job = _InstallJob(self.package, self._cancel, **({"probe": self._probe} if self._probe else {}))
         self._thread = QThread(self)
         job.moveToThread(self._thread)
@@ -149,13 +160,13 @@ class RuntimeSetupDialog(QDialog):
     def _on_progress(self, stage: str, done: int, total: int) -> None:
         if stage == "download":
             self.progress.setValue(int(done / max(total, 1) * 1000))
-            self.status.setText(f"Téléchargement · {gigabytes(done)} / {gigabytes(total)}")
+            self.status.setText(tr("Téléchargement · {done} / {total}").format(done=gigabytes(done), total=gigabytes(total)))
         elif stage == "extract":
             self.progress.setValue(int(done / max(total, 1) * 1000))
-            self.status.setText(f"Installation · {min(100, done * 100 // max(total, 1))} %")
+            self.status.setText(tr("Installation · {percent} %").format(percent=min(100, done * 100 // max(total, 1))))
         else:
             self.progress.setRange(0, 0)  # indeterminate while the card is tested
-            self.status.setText("Vérification de la carte graphique…")
+            self.status.setText(tr("Vérification de la carte graphique…"))
 
     def _on_finished(self, ok: bool, message: str) -> None:
         self.gpu_ready = ok
@@ -163,16 +174,16 @@ class RuntimeSetupDialog(QDialog):
         self.progress.setRange(0, 1000)
         self.progress.setValue(1000 if ok else 0)
         self.progress.setVisible(ok)
-        self.title.setText("Accélération graphique activée" if ok else startup.SLOW_TITLE)
+        self.title.setText(tr("Accélération graphique activée") if ok else tr(startup.SLOW_TITLE))
         self.status.setText("")
         self.detail.setText(message)
-        self.cancel_button.setText("Terminer")
+        self.cancel_button.setText(tr("Terminer"))
 
     def _cancel_or_close(self) -> None:
         if self._thread is not None:
             self._cancel.set()
             self.cancel_button.setEnabled(False)
-            self.status.setText("Annulation…")
+            self.status.setText(tr("Annulation…"))
             return
         self.accept() if self.gpu_ready else self.reject()
 

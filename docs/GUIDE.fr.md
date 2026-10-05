@@ -2,6 +2,8 @@
 
 Transcription vocale **100 % locale et hors ligne** pour Windows : faster-whisper (`large-v3-turbo` ou `large-v3`) accéléré par **ROCm** sur GPU AMD Radeon (testé sur RX 7800 XT, gfx1101), avec une fenêtre native PySide6.
 
+*English version: [GUIDE.en.md](GUIDE.en.md).*
+
 | Mode Direct, thème sombre | Transcription terminée, thème clair |
 |---|---|
 | ![Mode Direct](apercu-direct-sombre.png) | ![Terminé](apercu-termine-clair.png) |
@@ -97,7 +99,7 @@ Les raccourcis et le démarrage avec Windows ne sont pas des réglages : les cas
 
 | Section | Réglages |
 |---|---|
-| Général | thème, taille du texte, horodatage, micro, zone de notification, démarrage avec Windows, **raccourcis sur le Bureau et dans le menu Démarrer**, retour aux réglages par défaut (le vocabulaire est conservé) |
+| Général | thème, taille du texte, horodatage, **langue de l'interface** (celle de Windows, français ou anglais ; appliquée au redémarrage), micro, zone de notification, démarrage avec Windows, **raccourcis sur le Bureau et dans le menu Démarrer**, retour aux réglages par défaut (le vocabulaire est conservé) |
 | Transcription | langue parlée, plusieurs langues dans le même audio, **traduction en anglais**, contexte (sujet, noms, style), vocabulaire, qualité de recherche (*beam size*), utilisation du texte précédent, **transcription des fichiers par lots** (3 à 4× plus rapide sur GPU) |
 | Silences | filtre des silences (VAD) avec sa sensibilité et la pause minimale, suppression du texte inventé pendant les longs silences, seuil « pas de parole », pénalité de répétition |
 | Dictée | raccourci, mode Maintenir / Basculer, coller ou copier, espace après le texte, commandes vocales, signal sonore |
@@ -241,6 +243,8 @@ src/doyoucopy/
   session.py          SessionController : capture, transcription, corrections, résultat courant (sans Qt Widgets)
   history_controller.py  HistoryController : entrée courante, sauvegarde auto, audio et dictées conservés (sans Qt Widgets)
   diagnostics.py      journal, exceptions non rattrapées, rapport de diagnostic
+  i18n.py             langue de l'interface : tr("texte français") → traduction, choisie au démarrage
+  locales/en.py       traductions anglaises (clé = texte français)
   storage/
     history.py        historique SQLite + FTS5, rétention de l'audio
     audio.py          audio conservé en FLAC (PyAV), repli WAV
@@ -304,6 +308,7 @@ Principes :
 - **Les segments sont émis un par un** depuis le générateur de faster-whisper. C'est ce qui produit l'affichage progressif et permet d'annuler entre deux segments.
 - **Ajouter un modèle** revient à ajouter une entrée `ModelSpec` dans `core/models.py`. **Ajouter un format d'export** revient à créer une classe avec `suffix`, `label` et `render()`, puis à appeler `register()`.
 
+- **Tout texte affiché passe par `tr()`** (`i18n.py`), écrit en français dans le code ; `locales/en.py` en donne la version anglaise. Une constante de module se marque avec `N_()` et se traduit là où elle s'affiche. `tests/test_i18n.py` échoue si une traduction manque, ne sert plus, ou perd un `{paramètre}`. Le rapport de diagnostic et le journal restent en français et en anglais technique : ils s'adressent au développeur.
 - **La logique reste hors des widgets.** `SessionController` (capture, transcription) et `HistoryController` (ce qui est enregistré, quand) se testent sans fenêtre ; `MainWindow` affiche et relaie.
 - **Windows retire en silence un hook clavier trop lent.** Le raccourci global est donc réinstallé périodiquement (`KeyboardHook.reinstall`), sans trou : le nouveau hook est posé avant le retrait de l'ancien.
 

@@ -9,12 +9,13 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from doyoucopy.i18n import N_, number, tr
 from doyoucopy.runtime import gpu_detect, store
 from doyoucopy.runtime.packages import package_for
 
 log = logging.getLogger(__name__)
 
-SLOW_TITLE = "Transcription plus lente sur cette machine"
+SLOW_TITLE = N_("Transcription plus lente sur cette machine")  # translated where shown
 
 
 @dataclass(frozen=True)
@@ -54,19 +55,23 @@ def cpu_notice(choice: RuntimeChoice, detection: gpu_detect.Detection | None = N
     if choice.variant in (gpu_detect.NVIDIA, gpu_detect.AMD):
         driver = "NVIDIA" if choice.variant == gpu_detect.NVIDIA else "AMD Adrenalin"
         return CpuNotice(
-            SLOW_TITLE,
-            f"La carte graphique n'a pas pu être initialisée. Mettez à jour le pilote {driver}, puis relancez DoYouCopy.",
+            tr(SLOW_TITLE),
+            tr(
+                "La carte graphique n'a pas pu être initialisée. Mettez à jour le pilote {driver}, puis relancez DoYouCopy."
+            ).format(driver=driver),
         )
     detection = detection or gpu_detect.detect()
     package = package_for(detection.variant) if detection.has_gpu else None
     if package is not None:
         return CpuNotice(
-            SLOW_TITLE,
-            f"{detection.reason}. Son accélération n'est pas encore installée "
-            f"({package.download_size / 1024**3:.1f} Go à télécharger).",
+            tr(SLOW_TITLE),
+            f"{detection.reason}. "
+            + tr("Son accélération n'est pas encore installée ({size} Go à télécharger).").format(
+                size=number(package.download_size / 1024**3)
+            ),
             install_variant=detection.variant,
         )
-    return CpuNotice(SLOW_TITLE, f"{detection.reason}. DoYouCopy utilise le processeur.")
+    return CpuNotice(tr(SLOW_TITLE), f"{detection.reason}. " + tr("DoYouCopy utilise le processeur."))
 
 
 # ---- probe ----------------------------------------------------------------

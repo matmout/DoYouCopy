@@ -11,6 +11,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from doyoucopy import __version__
+from doyoucopy.i18n import tr
 
 CHUNK = 1024 * 1024
 TIMEOUT_S = 60
@@ -70,13 +71,13 @@ def download_file(
         response = opener(url, offset)
     except urllib.error.HTTPError as exc:
         if exc.code != 416 or not offset:
-            raise DownloadError(f"Téléchargement impossible ({_host(url)}) : {exc}") from exc
+            raise DownloadError(tr("Téléchargement impossible ({host}) : {error}").format(host=_host(url), error=exc)) from exc
         # 416 Range Not Satisfiable: the .part is already whole (or longer than the file,
         # if it changed on the server). Without starting over, every retry would fail.
         part.unlink(missing_ok=True)
         return download_file(url, dest, sha256, progress, cancel, opener)
     except OSError as exc:
-        raise DownloadError(f"Téléchargement impossible ({_host(url)}) : {exc}") from exc
+        raise DownloadError(tr("Téléchargement impossible ({host}) : {error}").format(host=_host(url), error=exc)) from exc
     with response:
         resumed = offset and getattr(response, "status", 200) == 206
         if resumed:
@@ -99,10 +100,10 @@ def download_file(
                     if progress:
                         progress(len(block))
         except (OSError, http.client.HTTPException) as exc:  # IncompleteRead is not an OSError
-            raise DownloadError(f"Téléchargement interrompu ({_host(url)}) : {exc}") from exc
+            raise DownloadError(tr("Téléchargement interrompu ({host}) : {error}").format(host=_host(url), error=exc)) from exc
     if sha256 is not None and digest.hexdigest() != sha256:
         part.unlink(missing_ok=True)
-        raise DownloadError(f"Fichier corrompu ou modifié : {dest.name} (empreinte SHA-256 incorrecte)")
+        raise DownloadError(tr("Fichier corrompu ou modifié : {name} (empreinte SHA-256 incorrecte)").format(name=dest.name))
     part.replace(dest)
     return dest
 

@@ -77,9 +77,10 @@ L'application détecte qu'elle tourne depuis le paquet (`doyoucopy.desktop.packa
    utilisateurs, pas d'achats, pas de partage de position).
 5. **Packages** : déposer `DoYouCopy-<version>-x64.msix`, **non signé**, venant de
    l'artefact GitHub Actions.
-6. **Description du Store** (fr-FR) : description, captures d'écran (au moins une,
-   1366×768 ou plus ; `docs/apercu-*.png`), logo du Store 300×300
-   (`docs/icon.png` agrandi, ou `Square150x150Logo.scale-200.png` de `build\msix\Assets`).
+6. **Descriptions du Store**, une par langue déclarée dans le paquet (**en-US** et
+   **fr-FR**, voir *Langues* ci-dessous) : description, captures d'écran (au moins une,
+   1366×768 ou plus), logo du Store 300×300 (`docs/icon.png` agrandi, ou
+   `Square150x150Logo.scale-200.png` de `build\msix\Assets`).
 7. **Options de soumission → Notes pour la certification** : coller le texte ci-dessous.
 8. *Soumettre au Store*. La certification prend en général de quelques heures à 3 jours
    ouvrés.
@@ -104,12 +105,33 @@ L'application détecte qu'elle tourne depuis le paquet (`doyoucopy.desktop.packa
 >   a SHA-256 hash embedded in the app. These libraries only accelerate the existing
 >   transcription engine on the GPU; they add no feature, and the app works without
 >   them (CPU). A strict offline mode blocks every download.
-> - **Startup task**: disabled by default; enabled only if the user turns on "Démarrer
->   avec Windows" in the settings.
+> - **Startup task**: disabled by default; enabled only if the user turns on "Start
+>   with Windows" in the settings.
 >
-> To test: launch the app, let the "Turbo" model download (~1.6 GB) or pick "Léger"
-> (small) in Settings → Transcription, then press Record, or hold Ctrl+Shift+Space in
-> Notepad and speak. The interface is in French.
+> To test: launch the app, let the "Turbo" model download (~1.6 GB) or pick "Light"
+> (small) at the top of the window, then press Record, or hold Ctrl+Shift+Space in
+> Notepad and speak. The interface follows the Windows display language (English or
+> French); it can be changed in Settings → General → Interface language.
+
+## Langues
+
+Le paquet déclare **en-US** (langue par défaut) et **fr-FR** (`<Resources>` du
+manifeste) : ce sont les langues dans lesquelles Partner Center accepte une fiche. La
+description du paquet (`ms-resource:AppDescription`) vient de
+`packaging/msix/Strings/<langue>/Resources.resw`.
+
+L'interface suit la langue d'affichage de Windows (français si Windows est en français,
+anglais sinon), réglable dans *Général → Langue de l'interface*. Captures d'écran de
+chaque fiche :
+
+```powershell
+.\.venv\Scripts\python.exe scripts\snapshot_ui.py build\captures-en --lang en
+.\.venv\Scripts\python.exe scripts\snapshot_ui.py build\captures-fr --lang fr
+```
+
+Ajouter une langue : un fichier `src/doyoucopy/locales/<code>.py`, son code dans
+`doyoucopy.i18n`, un `Resources.resw` et une ligne `<Resource Language=…>` dans le
+manifeste, puis une fiche de plus dans Partner Center.
 
 ## Si la certification refuse le téléchargement de l'accélération graphique
 

@@ -3,10 +3,11 @@ from __future__ import annotations
 from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, Qt, Signal
 from PySide6.QtWidgets import QCheckBox, QComboBox, QFrame, QLabel, QPushButton, QVBoxLayout, QWidget
 
+from doyoucopy.i18n import N_, tr
 from doyoucopy.ui import theme
 from doyoucopy.ui.widgets.segmented import SegmentedControl
 
-THEMES = [("auto", "Système"), ("dark", "Sombre"), ("light", "Clair")]
+THEMES = [("auto", N_("Système")), ("dark", N_("Sombre")), ("light", N_("Clair"))]
 
 
 class SettingsPopover(QWidget):
@@ -26,21 +27,21 @@ class SettingsPopover(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(panel)
 
-        self.vad_check = QCheckBox("Ignorer les silences (VAD)")
-        self.vad_check.setToolTip("Pour les fichiers et les enregistrements. Le mode Direct l'utilise toujours.")
-        self.timestamps_check = QCheckBox("Afficher l'horodatage")
+        self.vad_check = QCheckBox(tr("Ignorer les silences (VAD)"))
+        self.vad_check.setToolTip(tr("Pour les fichiers et les enregistrements. Le mode Direct l'utilise toujours."))
+        self.timestamps_check = QCheckBox(tr("Afficher l'horodatage"))
         self.timestamps_check.toggled.connect(self.timestamps_changed)
-        self.vocabulary_button = QPushButton("Vocabulaire…")
-        self.vocabulary_button.setToolTip("Mots à favoriser, remplacements, commandes vocales")
+        self.vocabulary_button = QPushButton(tr("Vocabulaire…"))
+        self.vocabulary_button.setToolTip(tr("Mots à favoriser, remplacements, commandes vocales"))
         self.vocabulary_button.clicked.connect(lambda: self._close_then(self.vocabulary_requested))
         self.mic_combo = QComboBox()
-        self.mic_combo.addItem("Micro par défaut", None)
+        self.mic_combo.addItem(tr("Micro par défaut"), None)
         for name in microphones:
             self.mic_combo.addItem(name, name)
         self.mic_combo.setMinimumWidth(260)
-        self.theme_control = SegmentedControl(THEMES)
+        self.theme_control = SegmentedControl([(value, tr(label)) for value, label in THEMES])
         self.theme_control.changed.connect(lambda value: self.theme_changed.emit(value))
-        self.all_button = QPushButton("Tous les réglages…")
+        self.all_button = QPushButton(tr("Tous les réglages…"))
         self.all_button.setObjectName("OutlineButton")
         self.all_button.clicked.connect(lambda: self._close_then(self.all_settings_requested))
 
@@ -48,15 +49,15 @@ class SettingsPopover(QWidget):
         layout.setContentsMargins(18, 16, 18, 18)
         layout.setSpacing(8)
         for title, widget in (
-            ("Transcription", None),
+            (N_("Transcription"), None),
             (None, self.vad_check),
             (None, self.timestamps_check),
             (None, self.vocabulary_button),
-            ("Micro", self.mic_combo),
-            ("Thème", self.theme_control),
+            (N_("Micro"), self.mic_combo),
+            (N_("Thème"), self.theme_control),
         ):
             if title:
-                label = QLabel(title)
+                label = QLabel(tr(title))
                 label.setObjectName("PopoverTitle")
                 if layout.count():
                     layout.addSpacing(6)
