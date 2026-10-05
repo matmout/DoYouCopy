@@ -12,6 +12,8 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 
+from doyoucopy.i18n import N_
+
 CT2_VERSION = "4.8.2"
 
 
@@ -51,7 +53,7 @@ _GB = 1024**3
 _PACKAGES: dict[tuple[str, str], RuntimePackage] = {
     ("nvidia", "cp313"): RuntimePackage(
         variant="nvidia",
-        label="Accélération NVIDIA (CUDA 12)",
+        label=N_("Accélération NVIDIA (CUDA 12)"),
         version="cuda12.8-cudnn9.10-1",
         downloads=(
             Download(
@@ -71,7 +73,7 @@ _PACKAGES: dict[tuple[str, str], RuntimePackage] = {
     ),
     ("amd", "cp313"): RuntimePackage(
         variant="amd",
-        label="Accélération AMD (ROCm 7.2)",
+        label=N_("Accélération AMD (ROCm 7.2)"),
         version=f"rocm7.2-ct2{CT2_VERSION}-1",
         downloads=(
             Download(

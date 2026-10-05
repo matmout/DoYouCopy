@@ -16,6 +16,8 @@ import subprocess
 import sys
 from dataclasses import dataclass
 
+from doyoucopy.i18n import tr
+
 log = logging.getLogger(__name__)
 
 NVIDIA, AMD, CPU = "nvidia", "amd", "cpu"
@@ -101,20 +103,26 @@ def classify(adapters: list[Adapter]) -> Detection:
     nvidia = [a for a in adapters if a.vendor == NVIDIA]
     for adapter in nvidia:
         if not _NVIDIA_TOO_OLD.search(adapter.name):
-            return Detection(NVIDIA, adapter, f"Carte NVIDIA détectée : {adapter.name}")
+            return Detection(NVIDIA, adapter, tr("Carte NVIDIA détectée : {name}").format(name=adapter.name))
     for adapter in adapters:
         if adapter.vendor == AMD and _AMD_SUPPORTED.search(adapter.name):
-            return Detection(AMD, adapter, f"Carte AMD détectée : {adapter.name}")
+            return Detection(AMD, adapter, tr("Carte AMD détectée : {name}").format(name=adapter.name))
     if nvidia:
-        return Detection(CPU, nvidia[0], f"{nvidia[0].name} : carte trop ancienne pour l'accélération (CUDA 12)")
+        return Detection(
+            CPU, nvidia[0], tr("{name} : carte trop ancienne pour l'accélération (CUDA 12)").format(name=nvidia[0].name)
+        )
     amd = next((a for a in adapters if a.vendor == AMD), None)
     if amd:
         return Detection(
-            CPU, amd, f"{amd.name} : non prise en charge par l'accélération AMD (Radeon RX 6800 et plus récentes)"
+            CPU,
+            amd,
+            tr("{name} : non prise en charge par l'accélération AMD (Radeon RX 6800 et plus récentes)").format(name=amd.name),
         )
     if adapters:
-        return Detection(CPU, adapters[0], f"{adapters[0].name} : pas d'accélération disponible pour cette carte")
-    return Detection(CPU, None, "Aucune carte graphique compatible détectée")
+        return Detection(
+            CPU, adapters[0], tr("{name} : pas d'accélération disponible pour cette carte").format(name=adapters[0].name)
+        )
+    return Detection(CPU, None, tr("Aucune carte graphique compatible détectée"))
 
 
 def detect() -> Detection:

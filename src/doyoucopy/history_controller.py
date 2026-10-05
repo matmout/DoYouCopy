@@ -18,12 +18,13 @@ from PySide6.QtCore import QObject, Signal
 
 from doyoucopy.config import Settings
 from doyoucopy.core.types import Segment
+from doyoucopy.i18n import N_, tr
 from doyoucopy.session import SessionController, SessionResult
 from doyoucopy.storage.history import Entry, HistoryStore
 
 log = logging.getLogger(__name__)
 
-CAPTURE_TITLES = {"record": "Enregistrement", "live": "Direct"}
+CAPTURE_TITLES = {"record": N_("Enregistrement"), "live": N_("Direct")}
 DICTATION_TITLE_CHARS = 60
 
 
@@ -76,7 +77,7 @@ class HistoryController(QObject):
         a full disk must not interrupt a transcription."""
         if not self.enabled:
             return
-        title = result.name if result.kind == "file" else CAPTURE_TITLES.get(result.kind, result.name)
+        title = result.name if result.kind == "file" else tr(CAPTURE_TITLES.get(result.kind, result.name))
         try:
             self.current_id = self.store.save(
                 kind=result.kind,

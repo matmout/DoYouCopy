@@ -20,6 +20,7 @@ import numpy as np
 
 from doyoucopy.audio.recorder import resample
 from doyoucopy.desktop.com import CLSCTX_ALL, COINIT_MULTITHREADED, GUID, Com
+from doyoucopy.i18n import tr
 
 log = logging.getLogger(__name__)
 
@@ -74,7 +75,7 @@ def sample_format(fmt: WAVEFORMATEX, address: int) -> str:
         return "float32"
     if tag == WAVE_FORMAT_PCM and bits in (16, 32):
         return f"int{bits}"
-    raise RuntimeError(f"format audio non pris en charge (type {fmt.wFormatTag}, {bits} bits)")
+    raise RuntimeError(tr("format audio non pris en charge (type {tag}, {bits} bits)").format(tag=fmt.wFormatTag, bits=bits))
 
 
 def to_mono_float(raw: bytes, dtype: str, channels: int) -> np.ndarray:
@@ -121,7 +122,7 @@ class LoopbackRecorder:
         if self._thread is not None:
             return
         if not self.available():
-            raise RuntimeError("la capture de l'audio de l'ordinateur n'existe que sous Windows")
+            raise RuntimeError(tr("la capture de l'audio de l'ordinateur n'existe que sous Windows"))
         self._chunks = []
         self._stop.clear()
         self._ready.clear()
@@ -129,12 +130,12 @@ class LoopbackRecorder:
         self._thread = threading.Thread(target=self._run, name="loopback-capture", daemon=True)
         self._thread.start()
         if not self._ready.wait(START_TIMEOUT_S):
-            self._error = RuntimeError("le périphérique de sortie ne répond pas")
+            self._error = RuntimeError(tr("le périphérique de sortie ne répond pas"))
         if self._error is not None:
             self._stop.set()
             self._thread.join(1)
             self._thread = None
-            raise RuntimeError(f"Audio de l'ordinateur indisponible : {self._error}") from self._error
+            raise RuntimeError(tr("Audio de l'ordinateur indisponible : {error}").format(error=self._error)) from self._error
 
     def stop(self) -> np.ndarray:
         if self._thread is None:

@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 
 from doyoucopy.core.types import DeviceConfig
+from doyoucopy.i18n import tr
 
 log = logging.getLogger(__name__)
 
@@ -42,13 +43,13 @@ def gpu_device(compute_type: str = "auto") -> DeviceConfig | None:
         return None
     if compute_type not in supported:
         compute_type = "float16" if "float16" in supported else "float32"
-    return DeviceConfig("cuda", compute_type, f"GPU · {compute_type}")
+    return DeviceConfig("cuda", compute_type, tr("GPU · {compute_type}").format(compute_type=compute_type))
 
 
 def cpu_device(compute_type: str = "auto") -> DeviceConfig:
-    if compute_type == CPU.compute_type or compute_type not in CPU_COMPUTE_TYPES:
-        return CPU
-    return DeviceConfig("cpu", compute_type, f"Processeur · {compute_type}")
+    if compute_type not in CPU_COMPUTE_TYPES:
+        compute_type = CPU.compute_type
+    return DeviceConfig("cpu", compute_type, tr("Processeur · {compute_type}").format(compute_type=compute_type))
 
 
 def detect_device(preference: str = "auto", compute_type: str = "auto") -> DeviceConfig:

@@ -6,6 +6,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
+from doyoucopy.i18n import tr
 from doyoucopy.ui import theme
 from doyoucopy.ui.theme import Tokens
 
@@ -21,13 +22,13 @@ class TrayIcon(QSystemTrayIcon):
         super().__init__(parent)
         self._t = tokens
         menu = QMenu()
-        menu.addAction("Ouvrir DoYouCopy", self.open_requested.emit)
-        self.dictation_action = QAction("Dictée active", menu, checkable=True)
+        menu.addAction(tr("Ouvrir DoYouCopy"), self.open_requested.emit)
+        self.dictation_action = QAction(tr("Dictée active"), menu, checkable=True)
         self.dictation_action.setChecked(dictation_enabled)
         self.dictation_action.toggled.connect(self.dictation_toggled)
         menu.addAction(self.dictation_action)
         menu.addSeparator()
-        menu.addAction("Quitter", self.quit_requested.emit)
+        menu.addAction(tr("Quitter"), self.quit_requested.emit)
         self._menu = menu  # the tray does not take ownership
         self.setContextMenu(menu)
         self.activated.connect(self._on_activated)
@@ -35,7 +36,7 @@ class TrayIcon(QSystemTrayIcon):
         self.set_listening(False)
 
     def set_hotkey_text(self, hotkey_text: str) -> None:
-        self.setToolTip(f"DoYouCopy · dictée : {hotkey_text}")
+        self.setToolTip(tr("DoYouCopy · dictée : {hotkey}").format(hotkey=hotkey_text))
 
     def set_tokens(self, tokens: Tokens) -> None:
         self._t = tokens

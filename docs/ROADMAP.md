@@ -81,7 +81,7 @@ Classement par valeur pour les deux profils ci-dessus, effort faible d'abord.
 
 | Tâche | Pourquoi | Effort |
 |---|---|---|
-| **Interface en anglais** (et choix de la langue d'interface) | L'application est multilingue, sa page GitHub est en anglais, mais son interface ne parle que français : c'est le premier frein pour un utilisateur étranger. | M |
+| ✅ **Interface en anglais** (et choix de la langue d'interface) | Fait : français et anglais, la langue de Windows par défaut, réglable dans *Général*. Une autre langue = un fichier `locales/<code>.py`. | M |
 | **Signature de l'installeur** | Supprime l'avertissement SmartScreen, principal motif d'abandon à l'installation. | S (+ délai du certificat) |
 | **Transcription de plusieurs fichiers** (file d'attente, export automatique à côté de la source) | Le profil « celui qui transcrit » a souvent des dizaines de fichiers. | M |
 | **Avis de nouvelle version**, désactivable, sans envoyer de données (lecture de la page Releases) | Sans lui, les correctifs n'atteignent pas les utilisateurs. Désactivé en mode hors ligne strict. | S |

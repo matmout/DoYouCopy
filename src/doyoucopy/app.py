@@ -19,13 +19,14 @@ import os
 import sys
 from pathlib import Path
 
-from doyoucopy import __version__, legacy
+from doyoucopy import __version__, i18n, legacy
 from doyoucopy.config import Settings
 from doyoucopy.core.engine import FasterWhisperEngine
 
 # detect_device() imports ctranslate2, which registers its DLL directories:
 # it must run before PySide6 is imported, and after runtime.startup.prepare().
 from doyoucopy.gpu.rocm_env import detect_device
+from doyoucopy.i18n import tr
 from doyoucopy.runtime import startup
 
 log = logging.getLogger(__name__)
@@ -41,6 +42,8 @@ def main() -> int:
         return 0
     os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
     settings = Settings.load()
+    i18n.set_language(i18n.resolve(settings.ui_language))
+    log.info("Interface language: %s", i18n.language())
 
     if "--probe" in args:  # child process of the runtime setup: is the GPU usable?
         startup.prepare("auto")
@@ -67,6 +70,7 @@ def main() -> int:
     set_app_user_model_id()
     app = QApplication(sys.argv)
     app.setApplicationName("DoYouCopy")
+    i18n.install_qt_translator(app)
     app.setWindowIcon(app_icon.qicon())  # every window, and the taskbar
     setup_style(app, settings.theme)
     worker = ModelWorker(engine)
@@ -75,6 +79,7 @@ def main() -> int:
     if not device.is_gpu:
         window.set_cpu_notice(startup.cpu_notice(choice))
     window.install_runtime_requested.connect(lambda: install_runtime_from_app(window))
+    window.restart_requested.connect(lambda: restart_app(window))
     tray = setup_dictation(app, window, settings, worker)
     from doyoucopy.dictation import autostart
 
@@ -150,6 +155,7 @@ def run_runtime_setup(settings: Settings) -> int:
     set_app_user_model_id()
     app = QApplication(sys.argv)
     app.setApplicationName("DoYouCopy")
+    i18n.install_qt_translator(app)
     setup_style(app, settings.theme)
     detection = gpu_detect.detect()
     log.info("Runtime setup: %s", detection)
@@ -162,10 +168,9 @@ def run_runtime_setup(settings: Settings) -> int:
 
 def install_runtime_from_app(window) -> None:
     """From the CPU banner: download, then restart so the new runtime is loaded."""
-    from PySide6.QtCore import QProcess
     from PySide6.QtWidgets import QMessageBox
 
-    from doyoucopy.runtime import gpu_detect, store
+    from doyoucopy.runtime import gpu_detect
     from doyoucopy.ui.runtime_dialog import RuntimeSetupDialog
 
     dialog = RuntimeSetupDialog(gpu_detect.detect(), window)
@@ -173,13 +178,22 @@ def install_runtime_from_app(window) -> None:
         return
     answer = QMessageBox.question(
         window,
-        "Redémarrer DoYouCopy",
-        "L'accélération graphique sera utilisée au prochain démarrage. Redémarrer DoYouCopy maintenant ?",
+        tr("Redémarrer DoYouCopy"),
+        tr("L'accélération graphique sera utilisée au prochain démarrage. Redémarrer DoYouCopy maintenant ?"),
     )
     if answer == QMessageBox.StandardButton.Yes:
-        program, arguments = (sys.executable, []) if store.is_frozen() else (sys.executable, ["-m", "doyoucopy"])
-        window.quit_app()
-        QProcess.startDetached(program, arguments)
+        restart_app(window)
+
+
+def restart_app(window) -> None:
+    """Quits (everything saved, as on a normal exit) and starts a new instance."""
+    from PySide6.QtCore import QProcess
+
+    from doyoucopy.runtime import store
+
+    program, arguments = (sys.executable, []) if store.is_frozen() else (sys.executable, ["-m", "doyoucopy"])
+    window.quit_app()
+    QProcess.startDetached(program, arguments)
 
 
 def setup_dictation(app, window, settings: Settings, worker):
@@ -229,8 +243,8 @@ def setup_dictation(app, window, settings: Settings, worker):
         if first_hide[0]:
             first_hide[0] = False
             tray.showMessage(
-                "DoYouCopy reste disponible",
-                f"Dictée : {settings.dictation_hotkey}. Quittez depuis cette icône.",
+                tr("DoYouCopy reste disponible"),
+                tr("Dictée : {hotkey}. Quittez depuis cette icône.").format(hotkey=settings.dictation_hotkey),
                 QSystemTrayIcon.MessageIcon.Information,
                 4000,
             )
@@ -245,12 +259,12 @@ def setup_dictation(app, window, settings: Settings, worker):
     try:
         hook.set_hotkey(parse_hotkey(settings.dictation_hotkey))
     except ValueError as exc:
-        tray.showMessage("Raccourci de dictée invalide", str(exc), QSystemTrayIcon.MessageIcon.Warning, 6000)
+        tray.showMessage(tr("Raccourci de dictée invalide"), str(exc), QSystemTrayIcon.MessageIcon.Warning, 6000)
         return tray
     if not hook.install():
         tray.showMessage(
-            "Dictée indisponible",
-            "Le raccourci global n'a pas pu être installé.",
+            tr("Dictée indisponible"),
+            tr("Le raccourci global n'a pas pu être installé."),
             QSystemTrayIcon.MessageIcon.Warning,
             6000,
         )

@@ -121,9 +121,9 @@ def test_engine_configure_unloads_and_sets_threads(tmp_path):
 
 
 def test_cpu_device_precision():
-    assert rocm_env.detect_device("cpu") is rocm_env.CPU
+    assert rocm_env.detect_device("cpu") == rocm_env.CPU
     assert rocm_env.detect_device("cpu", "float32").compute_type == "float32"
-    assert rocm_env.detect_device("cpu", "float16") is rocm_env.CPU  # not a CPU type
+    assert rocm_env.detect_device("cpu", "float16") == rocm_env.CPU  # not a CPU type
 
 
 # ---- exports and models -----------------------------------------------------------

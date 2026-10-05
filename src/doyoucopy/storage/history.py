@@ -19,6 +19,7 @@ from pathlib import Path
 import numpy as np
 
 from doyoucopy.core.types import Segment, Word
+from doyoucopy.i18n import N_, tr
 from doyoucopy.storage.audio import write_audio
 
 log = logging.getLogger(__name__)
@@ -56,8 +57,12 @@ CREATE TRIGGER IF NOT EXISTS sessions_au AFTER UPDATE OF title, text ON sessions
 END;
 """
 
-KIND_LABELS = {"record": "Micro", "live": "Direct", "file": "Fichier", "dictation": "Dictée"}
-MONTHS = ("janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc.")
+# French: translated where shown, with i18n.tr.
+KIND_LABELS = {"record": N_("Micro"), "live": N_("Direct"), "file": N_("Fichier"), "dictation": N_("Dictée")}
+MONTHS = (
+    N_("janv."), N_("févr."), N_("mars"), N_("avr."), N_("mai"), N_("juin"),
+    N_("juil."), N_("août"), N_("sept."), N_("oct."), N_("nov."), N_("déc."),
+)
 
 
 @dataclass
@@ -86,7 +91,9 @@ class Entry:
 
     def date_label(self) -> str:
         t = time.localtime(self.created)
-        return f"{t.tm_mday} {MONTHS[t.tm_mon - 1]} {t.tm_year} · {t.tm_hour:02d}:{t.tm_min:02d}"
+        return tr("{day} {month} {year} · {time}").format(
+            day=t.tm_mday, month=tr(MONTHS[t.tm_mon - 1]), year=t.tm_year, time=f"{t.tm_hour:02d}:{t.tm_min:02d}"
+        )
 
 
 # ---- segments <-> JSON ------------------------------------------------------
@@ -235,7 +242,7 @@ class HistoryStore:
         self._writers = []
 
     def rename(self, entry_id: int, title: str) -> None:
-        self.db.execute("UPDATE sessions SET title=? WHERE id=?", (title.strip() or "Sans titre", entry_id))
+        self.db.execute("UPDATE sessions SET title=? WHERE id=?", (title.strip() or tr("Sans titre"), entry_id))
         self.db.commit()
 
     def set_favorite(self, entry_id: int, favorite: bool) -> None:

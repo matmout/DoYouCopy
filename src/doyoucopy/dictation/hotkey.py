@@ -23,6 +23,7 @@ from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence
 
 from doyoucopy.dictation.inject import send_menu_mask
+from doyoucopy.i18n import tr
 
 log = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ def parse_hotkey(text: str) -> Hotkey:
     """'Ctrl+Shift+Space' -> Hotkey. Raises ValueError with a message for the user."""
     sequence = QKeySequence.fromString(text, QKeySequence.SequenceFormat.PortableText)
     if sequence.isEmpty() or sequence.count() != 1:
-        raise ValueError(f"Raccourci invalide : « {text} »")
+        raise ValueError(tr("Raccourci invalide : « {hotkey} »").format(hotkey=text))
     combination = sequence[0]
     key = combination.key()
     modifiers = combination.keyboardModifiers()
@@ -76,9 +77,9 @@ def parse_hotkey(text: str) -> Hotkey:
             mods |= flag
     vk = _vk(key)
     if vk is None:
-        raise ValueError(f"Touche non prise en charge dans « {text} »")
+        raise ValueError(tr("Touche non prise en charge dans « {hotkey} »").format(hotkey=text))
     if not mods and vk not in _STANDALONE:
-        raise ValueError("Ajoutez Ctrl, Alt, Maj ou Win : cette touche seule servirait à la frappe.")
+        raise ValueError(tr("Ajoutez Ctrl, Alt, Maj ou Win : cette touche seule servirait à la frappe."))
     return Hotkey(vk, mods, sequence.toString(QKeySequence.SequenceFormat.PortableText))
 
 

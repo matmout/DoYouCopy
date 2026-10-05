@@ -7,7 +7,8 @@
     (build\dist\DoYouCopy, avec -SkipInstaller si l'installeur n'est pas voulu) et de
     build\msix (manifeste et logos, écrits par scripts\make_build_assets.py) :
     1. assemble build\msix\layout ;
-    2. indexe les logos (makepri : échelles et tailles de la barre des tâches) ;
+    2. indexe les logos (makepri : échelles et tailles de la barre des tâches) et la
+       description du paquet en anglais et en français (packaging\msix\Strings) ;
     3. crée dist\DoYouCopy-<version>-x64.msix (makeappx).
 
     Le paquet n'est PAS signé : c'est ce fichier qu'on dépose dans Partner Center, le
@@ -75,12 +76,14 @@ Copy-Item -Recurse (Join-Path $Msix "Assets") (Join-Path $Layout "Assets")
 Copy-Item (Join-Path $Msix "AppxManifest.xml") $Layout
 
 Write-Host "==> [2/3] Index des ressources (makepri)" -ForegroundColor Cyan
-# Indexed apart from the application: only the logos and the manifest, so that the
-# thousands of files of DoYouCopy\ are not read as resources.
+# Indexed apart from the application: only the logos, the manifest texts (one
+# Resources.resw per language) and the manifest, so that the thousands of files of
+# DoYouCopy\ are not read as resources.
 $PriRoot = Join-Path $Msix "pri"
 if (Test-Path $PriRoot) { Remove-Item -Recurse -Force $PriRoot }
 New-Item -ItemType Directory -Force -Path $PriRoot | Out-Null
 Copy-Item -Recurse (Join-Path $Msix "Assets") (Join-Path $PriRoot "Assets")
+Copy-Item -Recurse (Join-Path $Root "packaging\msix\Strings") (Join-Path $PriRoot "Strings")
 Copy-Item (Join-Path $Msix "AppxManifest.xml") $PriRoot
 Invoke-Checked $MakePri @("new", "/pr", $PriRoot, "/cf", (Join-Path $Root "packaging\msix\priconfig.xml"),
     "/mn", (Join-Path $PriRoot "AppxManifest.xml"), "/of", (Join-Path $Layout "resources.pri"), "/o")

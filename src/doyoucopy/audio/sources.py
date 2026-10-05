@@ -6,9 +6,10 @@ import numpy as np
 
 from doyoucopy.audio.loopback import LoopbackRecorder
 from doyoucopy.audio.recorder import MicRecorder
+from doyoucopy.i18n import N_
 
 MIC, SYSTEM, BOTH = "mic", "system", "both"
-SOURCES = [(MIC, "Micro"), (SYSTEM, "Ordinateur"), (BOTH, "Les deux")]
+SOURCES = [(MIC, N_("Micro")), (SYSTEM, N_("Ordinateur")), (BOTH, N_("Les deux"))]  # labels: i18n.tr where shown
 
 
 def mix(a: np.ndarray, b: np.ndarray) -> np.ndarray:

@@ -3,6 +3,7 @@ from __future__ import annotations
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QToolButton, QVBoxLayout
 
+from doyoucopy.i18n import tr
 from doyoucopy.ui import theme
 from doyoucopy.ui.theme import Tokens
 
@@ -25,7 +26,7 @@ class NoticeBar(QFrame):
         self.action.clicked.connect(self.action_clicked)
         self.close_button = QToolButton()
         self.close_button.setObjectName("IconButton")
-        self.close_button.setToolTip("Masquer")
+        self.close_button.setToolTip(tr("Masquer"))
         self.close_button.clicked.connect(self.hide)
 
         texts = QVBoxLayout()

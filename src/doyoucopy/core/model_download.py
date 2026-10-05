@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from doyoucopy.download import DownloadError, download_file, open_url
+from doyoucopy.i18n import tr
 
 HUB = "https://huggingface.co"
 # The files faster-whisper needs (faster_whisper.utils.download_model).
@@ -53,7 +54,7 @@ def list_files(repo: str, opener: Callable = open_url) -> list[RemoteFile]:
         with opener(f"{HUB}/api/models/{repo}/tree/main") as response:
             entries = json.loads(response.read().decode("utf-8"))
     except (OSError, ValueError) as exc:
-        raise DownloadError(f"Impossible de joindre huggingface.co : {exc}") from exc
+        raise DownloadError(tr("Impossible de joindre huggingface.co : {error}").format(error=exc)) from exc
     files = []
     for entry in entries:
         path = entry.get("path", "")
@@ -63,7 +64,7 @@ def list_files(repo: str, opener: Callable = open_url) -> list[RemoteFile]:
             lfs = entry.get("lfs") or {}
             files.append(RemoteFile(path, int(lfs.get("size") or entry.get("size") or 0), lfs.get("oid")))
     if not any(f.path == "model.bin" for f in files):
-        raise DownloadError(f"Modèle introuvable sur huggingface.co : {repo}")
+        raise DownloadError(tr("Modèle introuvable sur huggingface.co : {repo}").format(repo=repo))
     return files
 
 
