@@ -1,6 +1,6 @@
 # Notes de version
 
-## Prochaine version
+## 1.2.0
 
 ### Interface en anglais
 
